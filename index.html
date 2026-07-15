@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>가전팀 편성표 뷰어</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+
+<!-- ===================================================================
+     편성표 데이터 — 주차가 추가되면 이 배열에만 항목을 넣으면 됩니다.
+     y: 연도 / m: 월 / w: 주차 / span: 방송 기간 / cross: 월 교차 주간 여부
+     이미지 파일명 규칙:  images/dept-{y}-{mm}-{w}.png   (사업부)
+                          images/team-{y}-{mm}-{w}.png   (팀편성)
+     =================================================================== -->
+<script>
+const WEEKS = [
+  { y: 2026, m: 1, w: 2, span: "01/05 ~ 01/11", cross: false },
+  { y: 2026, m: 1, w: 3, span: "01/12 ~ 01/18", cross: false },
+  { y: 2026, m: 1, w: 4, span: "01/19 ~ 01/25", cross: false },
+  { y: 2026, m: 1, w: 5, span: "01/26 ~ 02/01", cross: true  },
+  { y: 2026, m: 2, w: 1, span: "02/02 ~ 02/08", cross: false },
+  { y: 2026, m: 2, w: 2, span: "02/09 ~ 02/15", cross: false },
+  { y: 2026, m: 2, w: 3, span: "02/16 ~ 02/22", cross: false },
+  { y: 2026, m: 2, w: 4, span: "02/23 ~ 03/01", cross: true  },
+  { y: 2026, m: 3, w: 1, span: "03/02 ~ 03/08", cross: false },
+  { y: 2026, m: 3, w: 2, span: "03/09 ~ 03/15", cross: false },
+  { y: 2026, m: 3, w: 3, span: "03/16 ~ 03/22", cross: false },
+  { y: 2026, m: 3, w: 4, span: "03/23 ~ 03/29", cross: false },
+  { y: 2026, m: 3, w: 5, span: "03/30 ~ 04/05", cross: true  },
+  { y: 2026, m: 4, w: 2, span: "04/06 ~ 04/12", cross: false },
+  { y: 2026, m: 4, w: 3, span: "04/13 ~ 04/19", cross: false },
+  { y: 2026, m: 4, w: 4, span: "04/20 ~ 04/26", cross: false },
+  { y: 2026, m: 4, w: 5, span: "04/27 ~ 05/03", cross: true  },
+  { y: 2026, m: 5, w: 2, span: "05/04 ~ 05/10", cross: false },
+  { y: 2026, m: 7, w: 4, span: "07/20 ~ 07/26", cross: false },
+  { y: 2026, m: 7, w: 5, span: "07/27 ~ 08/02", cross: true  }
+];
+</script>
+
+<style>
+  :root{
+    --ga: #FFFF00; --li: #FFC000; --ju: #C6E0B4; --hit: #ADD8E6;
+    --bg: #15171B; --surface: #1E2128; --raised: #272B33; --line: #333841;
+    --text: #E9ECF1; --muted: #868D99; --dim: #5A616C;
+    --ui: 'Pretendard Variable', Pretendard, -apple-system, 'Malgun Gothic', '맑은 고딕', sans-serif;
+    --mono: 'JetBrains Mono', Consolas, 'D2Coding', monospace;
+  }
+  *{ box-sizing: border-box; margin: 0; padding: 0; }
+  html, body{ height: 100%; }
+  body{ background: var(--bg); color: var(--text); font-family: var(--ui); display: flex; flex-direction: column; overflow: hidden; }
+  .bar{ display: flex; align-items: center; gap: 22px; padding: 0 18px; height: 46px; background: var(--surface); border-bottom: 1px solid var(--line); flex: none; }
+  .tabs{ display: flex; gap: 2px; }
+  .tab{ font-family: var(--ui); font-size: 14px; font-weight: 600; letter-spacing: -0.01em; color: var(--muted); background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 15px 7px; cursor: pointer; transition: color .12s; }
+  .tab:hover{ color: var(--text); }
+  .tab[aria-selected="true"]{ color: var(--text); border-bottom-color: var(--ga); }
+  .tab:focus-visible{ outline: 2px solid var(--hit); outline-offset: -2px; }
+  .divider{ width: 1px; height: 22px; background: var(--line); flex: none; }
+  .find{ display: flex; align-items: center; gap: 7px; }
+  .find label{ font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: .1em; color: var(--dim); text-transform: uppercase; }
+  select{ font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--text); background: var(--raised); border: 1px solid var(--line); border-radius: 5px; padding: 6px 8px; cursor: pointer; }
+  select:hover{ border-color: var(--dim); }
+  select:focus-visible{ outline: 2px solid var(--hit); outline-offset: 1px; }
+  .meta{ margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .span{ font-family: var(--mono); font-size: 12px; color: var(--muted); letter-spacing: .02em; }
+  .flag{ font-size: 10px; font-weight: 700; color: #1A1D22; background: var(--li); border-radius: 3px; padding: 3px 6px; letter-spacing: -0.01em; }
+  .flag[hidden]{ display: none; }
+  .count{ font-family: var(--mono); font-size: 12px; color: var(--dim); font-weight: 600; min-width: 46px; text-align: right; }
+  .stage{ flex: 1; position: relative; min-height: 0; overflow: hidden; }
+  .viewer{ position: absolute; z-index: 1; inset: 12px 78px 22px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .viewer img{ display: block; width: auto; height: auto; max-width: 100%; max-height: 100%; min-width: 0; min-height: 0; background: #fff; border-radius: 2px; box-shadow: 0 3px 26px rgba(0,0,0,.5); cursor: zoom-in; user-select: none; -webkit-user-drag: none; }
+  .viewer.zoom{ display: block; overflow: auto; cursor: grab; }
+  .viewer.zoom.drag{ cursor: grabbing; }
+  .viewer.zoom img{ max-width: none; max-height: none; border-radius: 0; box-shadow: none; cursor: inherit; }
+  .nav{ position: absolute; z-index: 2; left: 0; transform: translateY(-50%); width: 50px; height: 116px; display: grid; place-items: center; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 8px; font-size: 30px; line-height: 1; padding-bottom: 4px; cursor: pointer; transition: background .12s, border-color .12s, opacity .12s, left .16s ease, top .16s ease; }
+  .nav:hover:not(:disabled){ background: var(--raised); border-color: var(--dim); }
+  .nav:disabled{ opacity: .22; cursor: default; }
+  .nav:focus-visible{ outline: 2px solid var(--hit); outline-offset: 2px; }
+  .hint{ position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); font-family: var(--mono); font-size: 10px; color: var(--dim); letter-spacing: .04em; pointer-events: none; }
+  .blank{ text-align: center; color: var(--muted); font-size: 14px; line-height: 1.7; }
+  .blank code{ font-family: var(--mono); font-size: 12px; color: var(--hit); background: var(--surface); padding: 2px 6px; border-radius: 3px; }
+  .rail{ flex: none; display: flex; align-items: flex-end; gap: 26px; height: 50px; padding: 0 18px 8px; background: var(--surface); border-top: 1px solid var(--line); overflow-x: auto; }
+  .group{ display: flex; flex-direction: column; gap: 6px; flex: none; }
+  .group b{ font-family: var(--mono); font-size: 10px; font-weight: 700; color: var(--dim); letter-spacing: .1em; padding-left: 1px; }
+  .ticks{ display: flex; gap: 3px; }
+  .tick{ position: relative; width: 30px; padding-top: 12px; background: none; border: 0; cursor: pointer; font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--dim); transition: color .12s; }
+  .tick::before{ content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 4px; border-radius: 2px; background: var(--line); transition: background .12s; }
+  .tick:hover{ color: var(--text); }
+  .tick:hover::before{ background: var(--dim); }
+  .tick[aria-current="true"]{ color: #15171B; }
+  .tick[aria-current="true"]::before{ background: var(--ga); height: 4px; }
+  .tick[aria-current="true"] span{ background: var(--ga); border-radius: 3px; padding: 1px 0; display: block; }
+  .tick[data-cross="1"]::after{ content: ""; position: absolute; top: 0; right: -3px; width: 3px; height: 4px; background: var(--li); }
+  .tick:focus-visible{ outline: 2px solid var(--hit); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce){ *{ transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="bar">
+  <div class="tabs" role="tablist" aria-label="시트 선택">
+    <button class="tab" role="tab" id="tab-dept" aria-selected="true" data-sheet="dept">사업부</button>
+    <button class="tab" role="tab" id="tab-team" aria-selected="false" data-sheet="team">팀편성</button>
+  </div>
+  <div class="divider"></div>
+  <div class="find"><label for="sel-y">찾기</label><select id="sel-y" aria-label="연도"></select><select id="sel-m" aria-label="월"></select><select id="sel-w" aria-label="주차"></select></div>
+  <div class="meta"><span class="flag" id="flag" hidden>월 교차</span><span class="span" id="span"></span><span class="count" id="count"></span></div>
+</div>
+<div class="stage">
+  <button class="nav prev" id="prev" aria-label="이전 주">‹</button>
+  <div class="viewer" id="viewer"><img id="img" alt=""><div class="blank" id="miss" hidden>이미지를 찾을 수 없습니다<br><code id="miss-path"></code><br><span style="font-size:12px">images 폴더에 파일이 있는지 확인하세요</span></div></div>
+  <button class="nav next" id="next" aria-label="다음 주">›</button>
+  <div class="hint">← → 주 이동 &nbsp;·&nbsp; 이미지 클릭하면 원본 크기로 확대</div>
+</div>
+<div class="rail" id="rail" role="tablist" aria-label="주차 이동"></div>
+<script>
+(function(){
+  "use strict";
+  const $ = id => document.getElementById(id);
+  const pad = n => String(n).padStart(2, "0");
+  const slug = k => `${k.y}-${pad(k.m)}-${k.w}`;
+  const src = (sheet, k) => `images/${sheet}-${slug(k)}.png`;
+  const list = WEEKS.slice().sort((a, b) => a.y - b.y || a.m - b.m || a.w - b.w);
+  let idx = list.length - 1;
+  let sheet = "dept";
+  let zoom = false;
+  function buildRail(){
+    const rail = $("rail"); rail.innerHTML = ""; let group = null, key = null;
+    list.forEach((k, i) => {
+      const gk = `${k.y}-${k.m}`;
+      if (gk !== key){ key = gk; group = document.createElement("div"); group.className = "group"; const b = document.createElement("b"); b.textContent = `${k.y} · ${pad(k.m)}월`; const ticks = document.createElement("div"); ticks.className = "ticks"; group.append(b, ticks); rail.append(group); }
+      const t = document.createElement("button"); t.className = "tick"; t.type = "button"; t.dataset.i = i; if (k.cross) t.dataset.cross = "1"; t.title = `${k.y}년 ${pad(k.m)}월 ${k.w}주 · ${k.span}`; t.innerHTML = `<span>${k.w}주</span>`; t.addEventListener("click", () => go(i)); group.lastChild.append(t);
+    });
+  }
+  function fill(sel, values, cur, fmt){ sel.innerHTML = ""; values.forEach(v => { const o = document.createElement("option"); o.value = v; o.textContent = fmt(v); if (v === cur) o.selected = true; sel.append(o); }); sel.disabled = values.length < 2; }
+  function syncFind(){ const k = list[idx]; fill($("sel-y"), [...new Set(list.map(x => x.y))], k.y, v => `${v}년`); fill($("sel-m"), [...new Set(list.filter(x => x.y === k.y).map(x => x.m))], k.m, v => `${pad(v)}월`); fill($("sel-w"), [...new Set(list.filter(x => x.y === k.y && x.m === k.m).map(x => x.w))], k.w, v => `${v}주차`); }
+  function jump(){ const y = +$("sel-y").value, m = +$("sel-m").value, w = +$("sel-w").value; let i = list.findIndex(k => k.y === y && k.m === m && k.w === w); if (i < 0) i = list.findIndex(k => k.y === y && k.m === m); if (i < 0) i = list.findIndex(k => k.y === y); if (i >= 0) go(i); }
+  function render(){ const k = list[idx]; $("img").src = src(sheet, k); $("img").alt = `${k.y}년 ${pad(k.m)}월 ${k.w}주차 ${sheet === "dept" ? "사업부" : "팀편성"} 편성표`; $("span").textContent = k.span; $("count").textContent = `${idx + 1} / ${list.length}`; $("flag").hidden = !k.cross; $("prev").disabled = idx === 0; $("next").disabled = idx === list.length - 1; document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", t.dataset.sheet === sheet)); document.querySelectorAll(".tick").forEach(t => t.setAttribute("aria-current", +t.dataset.i === idx)); document.querySelector(`.tick[data-i="${idx}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" }); setZoom(false); syncFind(); }
+  function go(i){ idx = Math.max(0, Math.min(list.length - 1, i)); render(); }
+  const GAP = 14;
+  function placeNav(){ const stage = document.querySelector(".stage"); const prev = $("prev"), next = $("next"), img = $("img"); const s = stage.getBoundingClientRect(); const box = (zoom || img.hidden || !img.naturalWidth) ? $("viewer").getBoundingClientRect() : img.getBoundingClientRect(); const bw = prev.offsetWidth || 50; const l = box.left - s.left - GAP - bw; const r = box.right - s.left + GAP; const cy = box.top - s.top + box.height / 2; prev.style.left = Math.max(4, l) + "px"; next.style.left = Math.min(s.width - bw - 4, r) + "px"; prev.style.top = next.style.top = cy + "px"; }
+  addEventListener("resize", placeNav); if (window.ResizeObserver){ new ResizeObserver(placeNav).observe(document.querySelector(".stage")); }
+  function setZoom(on){ zoom = on; $("viewer").classList.toggle("zoom", on); if (!on) $("viewer").scrollTo(0, 0); placeNav(); }
+  $("viewer").addEventListener("click", e => { if (e.detail === 0) return; if (zoom) { setZoom(false); return; } if (e.target !== $("img")) return; const r = $("img").getBoundingClientRect(); const rx = (e.clientX - r.left) / r.width; const ry = (e.clientY - r.top) / r.height; setZoom(true); const v = $("viewer"); v.scrollLeft = rx * v.scrollWidth - v.clientWidth / 2; v.scrollTop = ry * v.scrollHeight - v.clientHeight / 2; });
+  (function pan(){ const v = $("viewer"); let on = false, x = 0, y = 0, sl = 0, st = 0; v.addEventListener("mousedown", e => { if (!zoom) return; on = true; x = e.clientX; y = e.clientY; sl = v.scrollLeft; st = v.scrollTop; v.classList.add("drag"); e.preventDefault(); }); addEventListener("mousemove", e => { if (!on) return; v.scrollLeft = sl - (e.clientX - x); v.scrollTop = st - (e.clientY - y); }); addEventListener("mouseup", () => { on = false; v.classList.remove("drag"); }); })();
+  $("img").addEventListener("error", () => { $("img").hidden = true; $("miss").hidden = false; $("miss-path").textContent = src(sheet, list[idx]); placeNav(); });
+  $("img").addEventListener("load", () => { $("img").hidden = false; $("miss").hidden = true; placeNav(); });
+  document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => { sheet = t.dataset.sheet; render(); }));
+  $("prev").addEventListener("click", () => go(idx - 1)); $("next").addEventListener("click", () => go(idx + 1)); ["sel-y", "sel-m", "sel-w"].forEach(id => $(id).addEventListener("change", jump));
+  addEventListener("keydown", e => { if (e.target.tagName === "SELECT") return; if (e.key === "ArrowLeft") { go(idx - 1); e.preventDefault(); } if (e.key === "ArrowRight") { go(idx + 1); e.preventDefault(); } if (e.key === "Escape" && zoom) setZoom(false); if (e.key === "1") { sheet = "dept"; render(); } if (e.key === "2") { sheet = "team"; render(); } });
+  if (!list.length){ document.querySelector(".stage").innerHTML = `<div class="blank">등록된 편성표가 없습니다<br><span style="font-size:12px">HTML 상단의 <code>WEEKS</code> 배열에 주차를 추가하세요</span></div>`; } else { buildRail(); render(); }
+})();
+</script>
+</body>
+</html>
