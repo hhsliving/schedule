@@ -38,6 +38,7 @@ MAX_COL = 43  # AQ
 
 thin = Side(style="thin", color="000000")
 medium = Side(style="medium", color="000000")
+thick = Side(style="thick", color="000000")
 NO_FILL = PatternFill(fill_type=None)
 
 def solid(hex6):
@@ -101,14 +102,14 @@ def thin_grid_and_clear(ws):
 def full_border_scheme(ws):
     """VBA 섹션2의 medium 박스 순서 그대로."""
     thin_grid_and_clear(ws)                                   # A4:AQ30 thin + 색초기화
-    apply_box(ws, 1, 30, 1, MAX_COL, medium)                  # A1:AQ30
+    apply_box(ws, 1, 30, 1, MAX_COL, thick)                   # A1:AQ30 바깥쪽 굵게
     apply_box(ws, 4, 4, 1, MAX_COL, medium, inside_v=thin,
               inside_h=None)                                  # A4:AQ4
     apply_box(ws, 4, 30, 2, 7, medium, inside_v=thin)         # B4:G30 (월)
     apply_box(ws, 4, 30, 14, 19, medium, inside_v=thin)       # N4:S30 (수)
     apply_box(ws, 4, 30, 26, 31, medium, inside_v=thin)       # Z4:AE30 (금)
     apply_box(ws, 4, 30, 38, MAX_COL, medium, inside_v=thin)  # AL4:AQ30 (일)
-    apply_box(ws, 1, 30, 1, MAX_COL, medium)                  # A1:AQ30 (재적용)
+    apply_box(ws, 1, 30, 1, MAX_COL, thick)                   # A1:AQ30 (재적용 바깥쪽 굵게)
 
 def color_hit_self(ws):
     """VBA: Cells.Replace What:="hit", Replacement:="", ReplaceFormat 트릭
@@ -199,8 +200,8 @@ def finalize_merged_borders(ws, row_offset):
     row_offset: wsTV는 3:4행 삽입으로 +2, wsCopy는 0."""
     t = 3 + row_offset   # 제목 병합 마지막 행
     h = 4 + row_offset   # 요일 헤더 행
-    set_merge_border(ws, f"A1:AK{t}", left=medium, top=medium, right=thin)
-    set_merge_border(ws, f"AL1:AQ{t}", left=thin, top=medium, right=medium)
+    set_merge_border(ws, f"A1:AK{t}", left=thick, top=thick, right=thin)
+    set_merge_border(ws, f"AL1:AQ{t}", left=thin, top=thick, right=thick)
     day_groups = [("B", "G", True), ("H", "M", False), ("N", "S", True),
                   ("T", "Y", False), ("Z", "AE", True), ("AF", "AK", False),
                   ("AL", "AQ", True)]
@@ -216,7 +217,7 @@ wb = openpyxl.load_workbook(SRC)
 wsTV = wb["(TV)편성기획"]
 
 # 양식 통일: 과거 파일은 열 너비가 좁으므로 기준 파일(7월 양식)의 열 너비를 그대로 입힌다.
-#           TEMPLATE 미지정이면 원본 너비 유지.
+#            TEMPLATE 미지정이면 원본 너비 유지.
 TEMPLATE = os.environ.get("TEMPLATE", "")
 if TEMPLATE:
     _tw = openpyxl.load_workbook(TEMPLATE)
@@ -310,6 +311,7 @@ def process_sheet(ws, is_team_copy):
 
     # --- 마지막: A4:AQ5 medium 박스 (헤더 2행) ---
     apply_box(ws, 4, 5, 1, MAX_COL, medium)
+    apply_box(ws, 1, 30, 1, MAX_COL, thick) # 바깥쪽 테두리(thick) 덮어쓰기
 
 process_sheet(wsTV, is_team_copy=False)
 process_sheet(wsCopy, is_team_copy=True)
@@ -371,7 +373,7 @@ for row in wsCap["A1:C5"]:
     for cell in row:
         cell.alignment = CENTER_WRAP
         cell.border = Border(left=thin, right=thin, top=thin, bottom=thin)
-apply_box(wsCap, 1, 5, 1, 3, medium)
+apply_box(wsCap, 1, 5, 1, 3, thick)
 
 # ---------------------------------------------------------------
 # 섹션5: wsTV 3:4행 삽입 → Sheet1 표 이미지 캡처를 AL1에 붙이기
