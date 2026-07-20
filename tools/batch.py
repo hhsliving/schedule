@@ -16,6 +16,7 @@
 import glob, os, re, subprocess, sys, json, shutil
 import openpyxl
 import read_ratio_xlsx
+import pair as pairing
 
 # ---- 경로 (환경변수로 덮어쓸 수 있음) ----
 ROOT  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -27,6 +28,18 @@ RATIO_CSV = os.environ.get("RATIO_CSV", os.path.join(ROOT, "ratios.csv"))
 
 SHEET = "(TV)편성기획"
 TITLE = re.compile(r"◆\s*(\d{4})년\s*(\d{2})월\s*(\d+)주\s*편성표\s*\((\d{2}/\d{2})\s*~\s*(\d{2}/\d{2})\)")
+
+
+def dup_suffix(path):
+    """브라우저 중복 다운로드 접미사 → 정렬 번호.
+
+    'undefined_20260716.xlsx'      → 0   (원본 = 먼저 = 전월)
+    'undefined_20260716 (1).xlsx'  → 1   (사본 = 나중 = 다음월)
+    파일명 '끝'의 (n) 만 인식하므로 방송기간 '(0713 ~ 0719)' 는 오인하지 않는다.
+    """
+    base = os.path.splitext(os.path.basename(path))[0]
+    m = re.search(r"\((\d+)\)\s*$", base)
+    return int(m.group(1)) if m else 0
 
 
 def norm_key(k):
@@ -85,52 +98,13 @@ def classify(path):
 
 
 def scan():
-    """weeks/*/ 를 훑어 (편성표, 비중) 짝 만들기"""
-    items = []
-    dirs = sorted(d for d in glob.glob(os.path.join(WEEKS, "*")) if os.path.isdir(d))
-    if not dirs:
-        print(f"  ! {WEEKS} 에 주차 폴더가 없습니다")
-        return items
-
-    for d in dirs:
-        name = os.path.basename(d)
-        files = [f for f in sorted(glob.glob(os.path.join(d, "*.xlsx")))
-                 if not os.path.basename(f).startswith("~$")]
-        sched, ratios = None, []
-        for f in files:
-            k = classify(f)
-            if k == "sched" and not sched:
-                sched = f
-            elif k == "ratio":
-                ratios.append(f)          # 월교차 주간은 2개가 들어옵니다
-            elif k is None:
-                print(f"  ! {name}/{os.path.basename(f)}: 편성표도 비중도 아님 → 무시")
-        ratios.sort()                     # 파일명 순 = 뽑은 날짜 순
-        if not sched:
-            print(f"  ! {name}: 편성표를 찾지 못했습니다 → 건너뜀")
-            continue
-
-        wb = openpyxl.load_workbook(sched, read_only=True)
-        a1 = str(wb[SHEET]["A1"].value or "").strip()
-        wb.close()
-        m = TITLE.match(a1)
-        if not m:
-            print(f"  ! {name}: A1 제목 형식이 다릅니다 → 건너뜀 ({a1[:40]})")
-            continue
-        y, mo, w = int(m.group(1)), int(m.group(2)), int(m.group(3))
-        s, e = m.group(4), m.group(5)
-        rkey = f"{y}-{mo}-{w}"
-
-        if norm_key(name) and norm_key(name) != rkey:
-            print(f"  ! 폴더명 '{name}' 과 편성표 내용({rkey})이 다릅니다 — 내용을 따릅니다")
-
-        items.append({"file": sched, "ratios": ratios, "y": y, "m": mo, "w": w,
-                      "span": f"{s} ~ {e}",
-                      "cross": int(s.split("/")[0]) != int(e.split("/")[0]),
-                      "key": f"{y}-{mo:02d}-{w}", "rkey": rkey})
-    items.sort(key=lambda k: (k["y"], k["m"], k["w"]))
+    """weeks/ 의 파일들을 편성표-비중 세트로 짝지어 반환"""
+    items = pairing.pair(WEEKS, ROOT)
+    # pair.py 는 rkey 없이 반환하므로 key/rkey 정리
+    for it in items:
+        it["rkey"] = it["key"]                       # 2026-7-5
+        it["key"] = f"{it['y']}-{it['m']:02d}-{it['w']}"   # 2026-07-5 (이미지 파일명용)
     return items
-
 
 def get_ratio(it, quiet=True):
     """비중 결정: ratios.csv > 폴더 안 비중 리포트 > 없음
@@ -140,8 +114,9 @@ def get_ratio(it, quiet=True):
         F열 월누적   → 표의 "월"
 
     월교차 주간 (리포트 2개, 파일명 순)
-        1번째 파일 = 지난달 월 비중  → 그 파일의 F열(월누적) → 표의 "OO월 누적"
-        2번째 파일 = 이번주 1주차 비중 → 그 파일의 D열(현재주차) → 표의 "△△월 1주차"
+        먼저 뽑은 리포트 = 지난달 월 비중  → 그 파일의 F열(월누적) → 표의 "OO월 누적"
+        나중 뽑은 리포트 = 이번주 1주차 비중 → 그 파일의 D열(현재주차) → 표의 "△△월 1주차"
+        (순서는 파일명 끝 (1) 접미사로 판단: 원본=전월, (1)=다음월)
     """
     if it["rkey"] in CSV_RATIOS:
         return CSV_RATIOS[it["rkey"]], "csv"

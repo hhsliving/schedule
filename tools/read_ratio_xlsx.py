@@ -46,6 +46,43 @@ def read(path):
     return week, month
 
 
+
+def report_time(path):
+    """리포트를 뽑은 시각을 추정한다 (정렬용).
+
+    우선순위:
+      1) 파일 내부 생성시각 (docProps/core.xml <dcterms:created>) — 파일명과 무관
+      2) 파일명 안의 8자리 날짜 (20260716)
+      3) 파일 수정시각 (os.path.getmtime)
+    모두 실패하면 0.0 을 돌려준다.
+    """
+    import zipfile, re as _re
+    from datetime import datetime, timezone
+    # 1) 내부 생성시각
+    try:
+        with zipfile.ZipFile(path) as z:
+            core = z.read("docProps/core.xml").decode("utf-8", "ignore")
+        m = _re.search(r"<dcterms:created[^>]*>([^<]+)</dcterms:created>", core)
+        if m:
+            t = m.group(1).replace("Z", "+00:00")
+            return datetime.fromisoformat(t).timestamp()
+    except Exception:
+        pass
+    # 2) 파일명 안의 날짜
+    m = _re.search(r"(20\d{2})(\d{2})(\d{2})", os.path.basename(path))
+    if m:
+        try:
+            return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)),
+                            tzinfo=timezone.utc).timestamp()
+        except ValueError:
+            pass
+    # 3) 파일 수정시각
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        return 0.0
+
+
 if __name__ == "__main__":
     import sys
     w, m = read(sys.argv[1])
