@@ -5,7 +5,6 @@ on:
   push:
     paths:
       - 'weeks/**.xlsx'   # 편성표 · 비중 파일 추가/교체
-      - 'ratios.csv'      # 비중 직접 입력(보정)
       - 'tools/**.py'
   workflow_dispatch:
 
