@@ -1,0 +1,56 @@
+name: 편성표 이미지 생성
+
+# raw/ 에 편성표 엑셀이 올라오면 자동 실행 (수동 실행도 가능)
+on:
+  push:
+    paths:
+      - 'weeks/**.xlsx'   # 편성표 · 비중 파일 추가/교체
+      - 'ratios.csv'      # 비중 직접 입력(보정)
+      - 'tools/**.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # 세트 짝짓기에 커밋 이력 필요
+
+      - name: 필요한 프로그램 설치
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            libreoffice-calc \
+            poppler-utils \
+            fonts-noto-cjk \
+            fonts-crosextra-carlito
+          # fonts-crosextra-carlito : Calibri 메트릭 호환 폰트.
+          #   열 너비 환산 기준이라 없으면 렌더 폭이 달라집니다. 반드시 필요.
+          # fonts-noto-cjk         : 비중표 이미지의 한글.
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 파이썬 패키지 설치
+        run: pip install --quiet openpyxl pillow
+
+      - name: 이미지 생성 + index.html 갱신
+        run: python3 tools/batch.py
+
+      - name: 변경분 커밋
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add images index.html weeks/.pairs.json
+          if git diff --staged --quiet; then
+            echo "변경 없음"
+          else
+            git commit -m "편성표 이미지 갱신 ($(date +%Y-%m-%d))"
+            git push
+          fi
