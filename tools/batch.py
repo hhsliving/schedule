@@ -11,7 +11,6 @@
   · 어느 쪽이 편성표이고 비중인지는 파일 내용을 보고 알아서 구분합니다.
   · 주차(연·월·주·기간·월교차)는 편성표 A1 제목에서 읽습니다. 폴더 이름은 참고용입니다.
   · 비중 파일이 없으면 비중표는 공란으로 만들어집니다.
-  · ratios.csv 에 같은 주차가 있으면 그 값이 우선합니다(수동 보정용).
 """
 import glob, os, re, subprocess, sys, json, shutil
 import openpyxl
@@ -24,59 +23,6 @@ WEEKS = os.environ.get("WEEKS_DIR", os.path.join(ROOT, "weeks"))
 OUT   = os.environ.get("IMG_DIR",   os.path.join(ROOT, "images"))
 WORK  = os.path.dirname(os.path.abspath(__file__))
 TMP   = os.path.join(ROOT, "_batch")
-RATIO_CSV = os.environ.get("RATIO_CSV", os.path.join(ROOT, "ratios.csv"))
-
-SHEET = "(TV)편성기획"
-TITLE = re.compile(r"◆\s*(\d{4})년\s*(\d{2})월\s*(\d+)주\s*편성표\s*\((\d{2}/\d{2})\s*~\s*(\d{2}/\d{2})\)")
-
-
-def dup_suffix(path):
-    """브라우저 중복 다운로드 접미사 → 정렬 번호.
-
-    'undefined_20260716.xlsx'      → 0   (원본 = 먼저 = 전월)
-    'undefined_20260716 (1).xlsx'  → 1   (사본 = 나중 = 다음월)
-    파일명 '끝'의 (n) 만 인식하므로 방송기간 '(0713 ~ 0719)' 는 오인하지 않는다.
-    """
-    base = os.path.splitext(os.path.basename(path))[0]
-    m = re.search(r"\((\d+)\)\s*$", base)
-    return int(m.group(1)) if m else 0
-
-
-def norm_key(k):
-    """주차키 정규화: 2026-07-4 / 2026-7-04 → '2026-7-4'"""
-    m = re.fullmatch(r"\s*(\d{4})-(\d{1,2})-(\d{1,2})\s*", str(k))
-    return f"{int(m.group(1))}-{int(m.group(2))}-{int(m.group(3))}" if m else None
-
-
-# ---------------------------------------------------------------- 비중 (수동 csv)
-def load_ratios(path=RATIO_CSV):
-    """ratios.csv → {주차키: (주 비중, 월 비중)} ; % 단위(4.10 → 0.0410)"""
-    out = {}
-    if not os.path.exists(path):
-        return out
-    for ln, line in enumerate(open(path, encoding="utf-8"), 1):
-        line = line.split("#")[0].strip()
-        if not line:
-            continue
-        parts = [c.strip() for c in line.split(",")]
-        if len(parts) != 7:
-            print(f"  ! ratios.csv {ln}행: 항목이 7개가 아님 → 건너뜀: {line}")
-            continue
-        key = norm_key(parts[0])
-        if not key:
-            print(f"  ! ratios.csv {ln}행: 주차키 형식 오류 (예: 2026-08-1) → 건너뜀")
-            continue
-        try:
-            v = [float(x) / 100 for x in parts[1:]]
-        except ValueError:
-            print(f"  ! ratios.csv {ln}행: 숫자가 아닌 값 → 건너뜀: {line}")
-            continue
-        out[key] = ({"가전": v[0], "리빙": v[1], "주방": v[2]},
-                    {"가전": v[3], "리빙": v[4], "주방": v[5]})
-    return out
-
-
-CSV_RATIOS = load_ratios()
 
 
 # ---------------------------------------------------------------- 파일 분류
@@ -107,7 +53,7 @@ def scan():
     return items
 
 def get_ratio(it, quiet=True):
-    """비중 결정: ratios.csv > 폴더 안 비중 리포트 > 없음
+    """비중 결정: 업로드된 비중 리포트만 사용
 
     일반 주간 (리포트 1개)
         D열 현재주차 → 표의 "주"
@@ -118,9 +64,6 @@ def get_ratio(it, quiet=True):
         나중 뽑은 리포트 = 이번주 1주차 비중 → 그 파일의 D열(현재주차) → 표의 "△△월 1주차"
         (순서는 파일명 끝 (1) 접미사로 판단: 원본=전월, (1)=다음월)
     """
-    if it["rkey"] in CSV_RATIOS:
-        return CSV_RATIOS[it["rkey"]], "csv"
-
     rs = it["ratios"]
     if not rs:
         return None, None
