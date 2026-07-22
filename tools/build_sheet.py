@@ -16,7 +16,8 @@ VBA 매크로 '편성_사업부_팀_동시실행_2025_Final_v3' 를 openpyxl로 
 
 [B] 팀편성 복사본:
   - 동일 서식/테두리, 단 AL1:AQ3 수식은 월교차 분기(Sheet1 비중 참조),
-    색칠은 '가전' + 'hit & best'만, AL1:AQ3 내부색 초기화, 행삽입/그림 없음
+    색칠은 '가전' + 'hit & best'만, AL1:AQ3 내부색 초기화,
+    사업부와 요일 행 높이를 맞추기 위한 상단 2행 삽입, 그림 없음
 """
 import re, os
 from copy import copy
@@ -376,42 +377,50 @@ for row in wsCap["A1:C5"]:
 apply_box(wsCap, 1, 5, 1, 3, thick)
 
 # ---------------------------------------------------------------
-# 섹션5: wsTV 3:4행 삽입 → Sheet1 표 이미지 캡처를 AL1에 붙이기
+# 섹션5: 두 시트의 상단 높이 통일
+# 사업부/팀편성 모두 3:4행을 삽입해야 요일 행과 그 아래가 같은 위치에 놓인다.
+# 사업부에만 Sheet1 표 이미지를 AL1에 붙인다.
 # ---------------------------------------------------------------
-heights_before = snapshot_heights(wsTV)
-merges_before = [str(m) for m in wsTV.merged_cells.ranges]
-for m in merges_before:
-    wsTV.unmerge_cells(m)
+def expand_header_to_five_rows(ws):
+    """제목 영역을 3행에서 5행으로 늘리고 기존 요일/본문을 2행 내린다."""
+    heights_before = snapshot_heights(ws)
+    merges_before = [str(m) for m in ws.merged_cells.ranges]
+    for merged in merges_before:
+        ws.unmerge_cells(merged)
 
-wsTV.insert_rows(3, 2)
+    ws.insert_rows(3, 2)
 
-# 병합 복원: 3행 이전 유지 / 3행 걸침 확장 / 3행 이후 +2 (Excel Insert 동작 재현)
-for m in merges_before:
-    c1, r1, c2, r2 = range_boundaries(m)
-    if r2 < 3:
-        nr1, nr2 = r1, r2
-    elif r1 >= 3:
-        nr1, nr2 = r1 + 2, r2 + 2
-    else:
-        nr1, nr2 = r1, r2 + 2
-    wsTV.merge_cells(start_row=nr1, start_column=c1, end_row=nr2, end_column=c2)
+    # 병합 복원: 3행 이전 유지 / 3행 걸침 확장 / 3행 이후 +2
+    for merged in merges_before:
+        c1, r1, c2, r2 = range_boundaries(merged)
+        if r2 < 3:
+            nr1, nr2 = r1, r2
+        elif r1 >= 3:
+            nr1, nr2 = r1 + 2, r2 + 2
+        else:
+            nr1, nr2 = r1, r2 + 2
+        ws.merge_cells(start_row=nr1, start_column=c1,
+                       end_row=nr2, end_column=c2)
 
-# 삽입행(3,4)은 윗행(2행) 서식 상속 (Excel 기본 CopyOrigin 동작 재현)
-for c in range(1, MAX_COL + 1):
-    src = wsTV.cell(row=2, column=c)
-    for r in (3, 4):
-        dst = wsTV.cell(row=r, column=c)
-        dst.border = copy(src.border)
-        dst.fill = copy(src.fill)
+    # 삽입행(3,4)은 윗행(2행) 서식 상속 (Excel CopyOrigin 대응)
+    for c in range(1, MAX_COL + 1):
+        source = ws.cell(row=2, column=c)
+        for r in (3, 4):
+            target = ws.cell(row=r, column=c)
+            target.border = copy(source.border)
+            target.fill = copy(source.fill)
 
-# 행높이 재배치: 1~2 유지, 3~4 기본, 기존 3+ → +2
-new_h = {}
-for r, h in heights_before.items():
-    if r <= 2:
-        new_h[r] = h
-    else:
-        new_h[r + 2] = h
-rebuild_heights(wsTV, new_h)
+    # 행높이 재배치: 1~2 유지, 기존 3행 이후는 +2
+    new_h = {}
+    for r, h in heights_before.items():
+        if r <= 2:
+            new_h[r] = h
+        else:
+            new_h[r + 2] = h
+    rebuild_heights(ws, new_h)
+
+expand_header_to_five_rows(wsTV)
+expand_header_to_five_rows(wsCopy)
 
 # --- Sheet1 표 캡처 이미지 생성 ---
 FONT_PATH = "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
@@ -479,9 +488,10 @@ BLOCK_W = sum(col_px(wsTV, c) for c in range(38, MAX_COL + 1))  # AL:AQ
 INSET = 3
 import os
 ROW1_PT = float(os.environ.get("ROW1_PT", "24.75"))   # 맨 윗행 높이(pt)
-wsTV.row_dimensions[1].height = ROW1_PT
-for _r in range(2, 6):
-    wsTV.row_dimensions[_r].height = 15               # 렌더러 자동확장 방지
+for _ws in (wsTV, wsCopy):
+    _ws.row_dimensions[1].height = ROW1_PT
+    for _r in range(2, 6):
+        _ws.row_dimensions[_r].height = 15             # 렌더러 자동확장 방지
 
 BLOCK_H = sum(round((wsTV.row_dimensions[r].height) * 96 / 72) for r in range(1, 6))
 target_img_w = BLOCK_W - INSET * 2
@@ -502,7 +512,7 @@ print(f"블록 {BLOCK_W}x{BLOCK_H}px / 이미지 {target_img_w}x{target_img_h}px
 
 # 병합범위 둘레 테두리 확정 (저장 직전) — 헤더 우측 외곽선 포함
 finalize_merged_borders(wsTV, row_offset=2)
-finalize_merged_borders(wsCopy, row_offset=0)
+finalize_merged_borders(wsCopy, row_offset=2)
 
 wb.save(OUT)
 

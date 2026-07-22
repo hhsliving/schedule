@@ -7,7 +7,7 @@ if not IN:
     raise SystemExit("INFILE 환경변수에 대상 xlsx 경로를 지정하세요")
 wb = openpyxl.load_workbook(IN)
 
-for name, last in [("(TV)편성기획", 32), ("(TV)편성기획-팀편성", 30)]:
+for name, last in [("(TV)편성기획", 32), ("(TV)편성기획-팀편성", 32)]:
     ws = wb[name]
     W = sum(round((ws.column_dimensions[get_column_letter(c)].width or 8.43)*7)+5
             for c in range(1, 44))
