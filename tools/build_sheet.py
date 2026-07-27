@@ -264,6 +264,7 @@ def process_sheet(ws, is_team_copy):
     unmerge_intersecting(ws, 1, 3, 1, 37)          # A1:AK3
     ws.merge_cells("A1:AK3")
     ws["A1"].alignment = CENTER_WRAP
+    ws["A1"].font = Font(name=ws["A1"].font.name, size=30, bold=ws["A1"].font.bold, color=ws["A1"].font.color)
 
     unmerge_intersecting(ws, 1, 3, 38, MAX_COL)    # AL1:AQ3
     ws.merge_cells("AL1:AQ3")
@@ -390,7 +391,7 @@ def expand_header_to_five_rows(ws):
 
     ws.insert_rows(3, 2)
 
-    # 병합 복원: 3행 이전 유지 / 3행 걸침 확장 / 3행 이후 +2
+    # 병합 복 복원: 3행 이전 유지 / 3행 걸침 확장 / 3행 이후 +2
     for merged in merges_before:
         c1, r1, c2, r2 = range_boundaries(merged)
         if r2 < 3:
