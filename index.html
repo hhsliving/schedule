@@ -321,6 +321,15 @@ const WEEKS = [
   .tick[aria-current="true"] span{
     background: var(--ga); border-radius: 3px; padding: 1px 0; display: block;
   }
+
+  /* 오늘 날짜 빨간 박스 추가 */
+  .tick[data-today="true"] span{
+    display: block;
+    padding: 1px 0;
+    border-radius: 3px;
+    box-shadow: 0 0 0 1.5px #FF3B30; /* 테두리 공간 차지 방지용 box-shadow */
+  }
+
   .tick[data-cross="1"]::after{
     content: ""; position: absolute; top: 0; right: -3px;
     width: 3px; height: 4px; background: var(--li);
@@ -394,6 +403,9 @@ const WEEKS = [
     rail.innerHTML = "";
     let group = null, key = null;
 
+    const now = new Date();
+    const todayTime = now.getTime();
+
     list.forEach((k, i) => {
       const gk = `${k.y}-${k.m}`;
       if (gk !== key){
@@ -414,6 +426,25 @@ const WEEKS = [
       if (k.cross) t.dataset.cross = "1";
       t.title = `${k.y}년 ${pad(k.m)}월 ${k.w}주 · ${k.span}`;
       t.innerHTML = `<span>${k.w}주</span>`;
+
+      // [추가] 오늘 날짜가 속한 주차 계산
+      const [startStr, endStr] = k.span.split(" ~ ");
+      const [sm, sd] = startStr.split("/").map(Number);
+      const [em, ed] = endStr.split("/").map(Number);
+      let sy = k.y, ey = k.y;
+      
+      if (sm === 12 && em === 1) {
+        if (k.m === 1) sy = k.y - 1;
+        if (k.m === 12) ey = k.y + 1;
+      }
+      
+      const startTime = new Date(sy, sm - 1, sd, 0, 0, 0).getTime();
+      const endTime = new Date(ey, em - 1, ed, 23, 59, 59).getTime();
+
+      if (todayTime >= startTime && todayTime <= endTime) {
+        t.dataset.today = "true";
+      }
+
       t.addEventListener("click", () => go(i));
       group.lastChild.append(t);
     });
