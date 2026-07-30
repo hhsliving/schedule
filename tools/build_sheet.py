@@ -423,6 +423,66 @@ def expand_header_to_five_rows(ws):
 expand_header_to_five_rows(wsTV)
 expand_header_to_five_rows(wsCopy)
 
+# ---------------------------------------------------------------
+# 요일·날짜 헤더 강조
+# 예: 월 08/03, 화 08/04 ...
+# 최종 가공 후 요일 헤더는 6행에 위치한다.
+# ---------------------------------------------------------------
+DAY_HEADER_FONT_SIZE = float(
+    os.environ.get("DAY_HEADER_FONT_SIZE", "16")
+)
+
+DAY_HEADER_ROW_HEIGHT = float(
+    os.environ.get("DAY_HEADER_ROW_HEIGHT", "24")
+)
+
+
+def emphasize_day_headers(ws):
+    """월~일 요일·날짜 병합셀을 크고 굵게 표시한다."""
+
+    header_row = 6
+
+    # B:G / H:M / N:S / T:Y / Z:AE / AF:AK / AL:AQ
+    # 각 병합영역의 왼쪽 위 셀만 실제 값과 글꼴을 가진다.
+    day_header_columns = (
+        2,   # B  월
+        8,   # H  화
+        14,  # N  수
+        20,  # T  목
+        26,  # Z  금
+        32,  # AF 토
+        38,  # AL 일
+    )
+
+    for column in day_header_columns:
+        cell = ws.cell(
+            row=header_row,
+            column=column,
+        )
+
+        # 기존 글꼴 이름·색상 등은 유지하고
+        # 크기와 굵기만 변경한다.
+        new_font = copy(cell.font)
+        new_font.sz = DAY_HEADER_FONT_SIZE
+        new_font.b = True
+
+        cell.font = new_font
+        cell.alignment = CENTER_WRAP
+
+    # 큰 글자가 잘리지 않도록 헤더 높이도 최소 24pt로 확보
+    current_height = (
+        ws.row_dimensions[header_row].height or 0
+    )
+
+    if current_height < DAY_HEADER_ROW_HEIGHT:
+        ws.row_dimensions[header_row].height = (
+            DAY_HEADER_ROW_HEIGHT
+        )
+
+
+emphasize_day_headers(wsTV)
+emphasize_day_headers(wsCopy)
+
 # --- Sheet1 표 캡처 이미지 생성 ---
 FONT_PATH = "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
 f_bold = ImageFont.truetype(FONT_PATH, 15, index=2)
