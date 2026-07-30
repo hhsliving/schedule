@@ -328,10 +328,24 @@ const WEEKS = [
     position: fixed;
     z-index: 1000;
     inset: 0;
+    width: 100vw;
+    height: 100vh;
     display: grid;
     grid-template-rows: 54px minmax(0, 1fr);
-    background: rgba(7, 8, 10, .96);
+    background: rgba(7, 8, 10, .98);
     backdrop-filter: blur(5px);
+  }
+
+  /* Fullscreen API로 브라우저 상단바까지 숨긴 모니터 전체화면 */
+  .lightbox:fullscreen,
+  .lightbox:-webkit-full-screen{
+    width: 100vw;
+    height: 100vh;
+    inset: 0;
+  }
+
+  .lightbox::backdrop{
+    background: #07080A;
   }
 
   .lightbox-bar{
@@ -532,12 +546,12 @@ const WEEKS = [
   </div>
 
   <button class="nav next" id="next" type="button" aria-label="다음 주">›</button>
-  <div class="hint">← → 주 이동 &nbsp;·&nbsp; 1 사업부 &nbsp;·&nbsp; 2 팀편성 &nbsp;·&nbsp; 이미지 클릭하면 전체화면</div>
+  <div class="hint">← → 주 이동 &nbsp;·&nbsp; 1 사업부 &nbsp;·&nbsp; 2 팀편성 &nbsp;·&nbsp; 이미지 클릭하면 모니터 전체화면</div>
 </div>
 
 <div class="rail" id="rail" role="tablist" aria-label="주차 이동"></div>
 
-<!-- 이미지 클릭 시 열리는 전체화면 확대 레이어 -->
+<!-- 이미지 클릭 시 Fullscreen API로 모니터 전체를 채우는 확대 화면 -->
 <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="편성표 전체화면 보기" aria-hidden="true" hidden>
   <div class="lightbox-bar">
     <div class="lightbox-title">
@@ -791,35 +805,88 @@ const WEEKS = [
     new ResizeObserver(placeNav).observe(document.querySelector(".stage"));
   }
 
-  /* ---------- 전체화면 열기 / 닫기 ---------- */
-  function openLightbox(){
-    if (lightboxOpen || $("img").hidden) return;
-
-    lightboxOpen = true;
-    focusBeforeLightbox = document.activeElement;
-
-    $("lightbox").hidden = false;
-    $("lightbox").setAttribute("aria-hidden", "false");
-    renderLightbox();
-
-    requestAnimationFrame(() => {
-      $("lightbox-close").focus({ preventScroll: true });
-    });
+  /* ---------- 모니터 전체화면 열기 / 닫기 ---------- */
+  function fullscreenElement(){
+    return document.fullscreenElement || document.webkitFullscreenElement || null;
   }
 
-  function closeLightbox(){
+  function finishCloseLightbox(){
     if (!lightboxOpen) return;
 
     lightboxOpen = false;
     $("lightbox").hidden = true;
     $("lightbox").setAttribute("aria-hidden", "true");
 
+    // 주차와 사업부/팀편성 상태는 건드리지 않고,
+    // 확대 전에 사용하던 위치와 포커스로 그대로 돌아간다.
     if (focusBeforeLightbox instanceof HTMLElement){
       focusBeforeLightbox.focus({ preventScroll: true });
     }
 
     focusBeforeLightbox = null;
   }
+
+  async function openLightbox(){
+    if (lightboxOpen || $("img").hidden) return;
+
+    const lightbox = $("lightbox");
+
+    lightboxOpen = true;
+    focusBeforeLightbox = document.activeElement;
+
+    lightbox.hidden = false;
+    lightbox.setAttribute("aria-hidden", "false");
+    renderLightbox();
+
+    try{
+      // 반드시 이미지 클릭 이벤트 안에서 즉시 호출해야 브라우저가 허용한다.
+      if (lightbox.requestFullscreen){
+        await lightbox.requestFullscreen({ navigationUI: "hide" });
+      } else if (lightbox.webkitRequestFullscreen){
+        lightbox.webkitRequestFullscreen();
+      } else {
+        throw new Error("이 브라우저는 Fullscreen API를 지원하지 않습니다.");
+      }
+
+      $("lightbox-close").focus({ preventScroll: true });
+    } catch (error){
+      console.error("전체화면 진입 실패:", error);
+      finishCloseLightbox();
+      alert("브라우저가 모니터 전체화면 전환을 허용하지 않았습니다. 페이지를 한 번 클릭한 뒤 다시 시도하거나, 브라우저의 전체화면 권한을 확인하세요.");
+    }
+  }
+
+  async function closeLightbox(){
+    if (!lightboxOpen) return;
+
+    // 닫기 버튼은 먼저 브라우저 전체화면을 종료한다.
+    // 종료 완료 시 fullscreenchange에서 finishCloseLightbox()가 실행된다.
+    if (fullscreenElement()){
+      try{
+        if (document.exitFullscreen){
+          await document.exitFullscreen();
+        } else if (document.webkitExitFullscreen){
+          document.webkitExitFullscreen();
+        }
+        return;
+      } catch (error){
+        console.error("전체화면 종료 실패:", error);
+      }
+    }
+
+    finishCloseLightbox();
+  }
+
+  function handleFullscreenChange(){
+    // ESC는 브라우저가 직접 처리하므로 keydown이 오지 않을 수 있다.
+    // 전체화면 요소가 사라진 순간 확대 레이어도 닫아 원래 화면으로 복귀한다.
+    if (lightboxOpen && !fullscreenElement()){
+      finishCloseLightbox();
+    }
+  }
+
+  document.addEventListener("fullscreenchange", handleFullscreenChange);
+  document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
 
   /* ---------- 이미지 오류 / 로드 ---------- */
   $("img").addEventListener("error", () => {
