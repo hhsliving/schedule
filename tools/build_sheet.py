@@ -45,6 +45,13 @@ NO_FILL = PatternFill(fill_type=None)
 def solid(hex6):
     return PatternFill(start_color=hex6, end_color=hex6, fill_type="solid")
 
+def fill_and_bold(cell, fill):
+    """배경색을 적용하고 기존 글꼴 속성을 유지한 채 볼드 처리."""
+    cell.fill = fill
+    new_font = copy(cell.font)
+    new_font.bold = True
+    cell.font = new_font
+
 YELLOW = "FFFF00"   # 가전
 ORANGE = "FFC000"   # 리빙
 GREEN  = "C6E0B4"   # 주방
@@ -120,7 +127,7 @@ def color_hit_self(ws):
         for cell in row:
             v = cell.value
             if isinstance(v, str) and "hit" in v.lower():
-                cell.fill = fill
+                fill_and_bold(cell, fill)
 
 def left_offsets(col):
     if col >= 4:
@@ -142,11 +149,11 @@ def color_depts(ws, dept_colors):
             if key in dept_colors:
                 fill = solid(dept_colors[key])
                 col = cell.column
-                cell.fill = fill
+                fill_and_bold(cell, fill)
                 for off in left_offsets(col):
-                    ws.cell(row=cell.row, column=col + off).fill = fill
-                if col < MAX_COL + 1:
-                    ws.cell(row=cell.row, column=col + 1).fill = fill
+                    fill_and_bold(ws.cell(row=cell.row, column=col + off), fill)
+                if col < MAX_COL:
+                    fill_and_bold(ws.cell(row=cell.row, column=col + 1), fill)
 
 def color_hitbest_left(ws):
     """'hit & best' 셀: 왼쪽1~3만 하늘색 (셀 자체는 ReplaceFormat에서 이미 처리)"""
@@ -157,7 +164,7 @@ def color_hitbest_left(ws):
             if isinstance(v, str) and "hit & best" in v.lower():
                 col = cell.column
                 for off in left_offsets(col):
-                    ws.cell(row=cell.row, column=col + off).fill = fill
+                    fill_and_bold(ws.cell(row=cell.row, column=col + off), fill)
 
 def snapshot_heights(ws):
     return {r: d.height for r, d in ws.row_dimensions.items() if d.height is not None}
@@ -345,7 +352,7 @@ else:
     wsCap["C1"].font = Font(bold=True)
 wsCap["A1"].font = Font(bold=True)
 for c in ("A1", "B1", "C1"):
-    wsCap[c].fill = solid(HEADER_BLUE)
+    fill_and_bold(wsCap[c], solid(HEADER_BLUE))
 
 wsCap["A2"] = "사업부"
 if not BLANK:
@@ -358,9 +365,9 @@ for _r, _k in ((3, "가전"), (4, "리빙"), (5, "주방")):
     if VAL_B[_k] is not None: wsCap[f"B{_r}"] = VAL_B[_k]
     if VAL_C[_k] is not None: wsCap[f"C{_r}"] = VAL_C[_k]
 
-wsCap["A3"].fill = solid(YELLOW)
-wsCap["A4"].fill = solid(ORANGE)
-wsCap["A5"].fill = solid(GREEN)
+fill_and_bold(wsCap["A3"], solid(YELLOW))
+fill_and_bold(wsCap["A4"], solid(ORANGE))
+fill_and_bold(wsCap["A5"], solid(GREEN))
 white = solid("FFFFFF")
 for c in ("A2", "B2", "C2"):
     wsCap[c].fill = white
@@ -527,7 +534,7 @@ def draw_table(W, H, scale=3):
                 fill = (255, 255, 255)
             dr.rectangle([x, y, x + cw[ci], y + rh[ri]], fill=fill,
                          outline=(0, 0, 0), width=scale)          # 표시 1px
-            f = fb if ri in (0, 1) else fr
+            f = fb if ri in (0, 1) or (ci == 0 and ri in name_colors) else fr
             bb = dr.textbbox((0, 0), text, font=f)
             dr.text((x + (cw[ci] - (bb[2]-bb[0])) / 2,
                      y + (rh[ri] - (bb[3]-bb[1])) / 2 - bb[1]),
