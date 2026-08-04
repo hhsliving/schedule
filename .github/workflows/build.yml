@@ -1,15 +1,19 @@
 name: 편성표 이미지 생성
 
-# raw/ 에 편성표 엑셀이 올라오면 자동 실행 (수동 실행도 가능)
 on:
   push:
     paths:
-      - 'weeks/**.xlsx'   # 편성표 · 비중 파일 추가/교체
+      - 'weeks/**.xlsx'
       - 'tools/**.py'
+      - '.github/workflows/build.yml'
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: schedule-image-build
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -18,7 +22,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # 세트 짝짓기에 커밋 이력 필요
+          fetch-depth: 0
+
+      - name: 실행 모드 설정
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "FULL_REBUILD=1" >> "$GITHUB_ENV"
+          else
+            echo "FULL_REBUILD=0" >> "$GITHUB_ENV"
+          fi
+
+          echo "PUSH_BEFORE=${{ github.event.before }}" >> "$GITHUB_ENV"
 
       - name: 필요한 프로그램 설치
         run: |
@@ -28,9 +43,6 @@ jobs:
             poppler-utils \
             fonts-noto-cjk \
             fonts-crosextra-carlito
-          # fonts-crosextra-carlito : Calibri 메트릭 호환 폰트.
-          #   열 너비 환산 기준이라 없으면 렌더 폭이 달라집니다. 반드시 필요.
-          # fonts-noto-cjk         : 비중표 이미지의 한글.
 
       - uses: actions/setup-python@v5
         with:
@@ -39,14 +51,17 @@ jobs:
       - name: 파이썬 패키지 설치
         run: pip install --quiet openpyxl pillow
 
-      - name: 이미지 생성 + index.html 갱신
+      - name: 이미지 생성 및 index.html 갱신
         run: python3 tools/batch.py
 
       - name: 변경분 커밋
+        shell: bash
         run: |
-          git config user.name  "github-actions[bot]"
+          git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git add images index.html weeks/.pairs.json
+
           if git diff --staged --quiet; then
             echo "변경 없음"
           else
