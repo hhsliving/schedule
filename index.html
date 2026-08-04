@@ -9,12 +9,13 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 
-<!-- ===================================================================
-     편성표 데이터 — 주차가 추가되면 이 배열에만 항목을 넣으면 됩니다.
-     y: 연도 / m: 월 / w: 주차 / span: 방송 기간 / cross: 월 교차 주간 여부
-     이미지 파일명 규칙:  images/dept-{y}-{mm}-{w}.png   (사업부)
-                          images/team-{y}-{mm}-{w}.png   (팀편성)
-     =================================================================== -->
+<!--
+  이미지 파일명 규칙
+  사업부: images/dept-{연도}-{두 자리 월}-{주차}.png
+  팀편성: images/team-{연도}-{두 자리 월}-{주차}.png
+
+  tools/batch.py가 아래 WEEKS 배열을 자동으로 갱신합니다.
+-->
 <script>
 const WEEKS = [
   { y: 2026, m: 1, w: 2, span: "01/05 ~ 01/11", cross: false },
@@ -54,152 +55,239 @@ const WEEKS = [
 </script>
 
 <style>
-  :root{
-    /* 편성표 시트 자체의 색 언어에서 가져온 팔레트 */
-    --ga:   #FFFF00;   /* 가전 */
-    --li:   #FFC000;   /* 리빙 */
-    --ju:   #C6E0B4;   /* 주방 */
-    --hit:  #ADD8E6;   /* Hit & Best */
-
-    --bg:      #15171B;
-    --surface: #1E2128;
-    --raised:  #272B33;
-    --line:    #333841;
-    --text:    #E9ECF1;
-    --muted:   #868D99;
-    --dim:     #5A616C;
-
-    --ui: 'Pretendard Variable', Pretendard, -apple-system, 'Malgun Gothic', '맑은 고딕', sans-serif;
-    --mono: 'JetBrains Mono', Consolas, 'D2Coding', monospace;
+  :root {
+    --ga: #ffff00;
+    --li: #ffc000;
+    --hit: #add8e6;
+    --bg: #15171b;
+    --surface: #1e2128;
+    --raised: #272b33;
+    --line: #333841;
+    --text: #e9ecf1;
+    --muted: #868d99;
+    --dim: #5a616c;
+    --ui: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+      "Segoe UI", "Malgun Gothic", sans-serif;
+    --mono: "JetBrains Mono", Consolas, "D2Coding", monospace;
   }
 
-  *{ box-sizing: border-box; margin: 0; padding: 0; }
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
 
-  html, body{ height: 100%; }
+  html,
+  body {
+    width: 100%;
+    height: 100%;
+  }
 
-  body{
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--ui);
+  button,
+  select {
+    font: inherit;
+  }
+
+  button {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--ui);
   }
 
-  /* ---------------- 상단 바 ---------------- */
-  .bar{
+  [hidden] {
+    display: none !important;
+  }
+
+  /* 상단 도구 모음 */
+  .bar {
+    flex: none;
     display: flex;
     align-items: center;
-    gap: 22px;
-    padding: 0 18px;
+    gap: 20px;
     height: 46px;
+    padding: 0 18px;
     background: var(--surface);
     border-bottom: 1px solid var(--line);
-    flex: none;
   }
 
-  .tabs{ display: flex; gap: 2px; }
+  .tabs {
+    display: flex;
+    align-items: stretch;
+    gap: 2px;
+    height: 100%;
+  }
 
-  .tab{
-    font-family: var(--ui);
-    font-size: 14px;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    color: var(--muted);
-    background: none;
+  .tab {
+    position: relative;
+    display: grid;
+    place-items: center;
+    min-width: 68px;
+    padding: 0 14px;
     border: 0;
-    border-bottom: 2px solid transparent;
-    padding: 8px 15px 7px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 650;
     cursor: pointer;
-    transition: color .12s;
   }
-  .tab:hover{ color: var(--text); }
-  .tab[aria-selected="true"]{
+
+  .tab::after {
+    content: "";
+    position: absolute;
+    right: 12px;
+    bottom: 0;
+    left: 12px;
+    height: 2px;
+    background: transparent;
+  }
+
+  .tab:hover {
     color: var(--text);
-    border-bottom-color: var(--ga);
   }
-  .tab:focus-visible{ outline: 2px solid var(--hit); outline-offset: -2px; }
 
-  .divider{ width: 1px; height: 22px; background: var(--line); flex: none; }
+  .tab[aria-selected="true"] {
+    color: var(--text);
+  }
 
-  .find{ display: flex; align-items: center; gap: 7px; }
+  .tab[aria-selected="true"]::after {
+    background: var(--ga);
+  }
 
-  .find label{
+  .divider {
+    width: 1px;
+    height: 22px;
+    background: var(--line);
+  }
+
+  .find {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .find label {
+    color: var(--dim);
     font-family: var(--mono);
     font-size: 10px;
-    font-weight: 600;
-    letter-spacing: .1em;
-    color: var(--dim);
-    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.1em;
   }
 
-  select{
-    font-family: var(--mono);
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text);
-    background: var(--raised);
+  select {
+    height: 30px;
+    padding: 0 8px;
     border: 1px solid var(--line);
     border-radius: 5px;
-    padding: 6px 8px;
+    background: var(--raised);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
     cursor: pointer;
   }
-  select:hover{ border-color: var(--dim); }
-  select:focus-visible{ outline: 2px solid var(--hit); outline-offset: 1px; }
 
-  .meta{
+  select:hover {
+    border-color: var(--dim);
+  }
+
+  select:disabled {
+    opacity: 0.68;
+    cursor: default;
+  }
+
+  .meta {
     margin-left: auto;
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 12px;
+    min-width: 0;
   }
 
-  .span{
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--muted);
-    letter-spacing: .02em;
-  }
-
-  .flag{
-    font-size: 10px;
-    font-weight: 700;
-    color: #1A1D22;
-    background: var(--li);
-    border-radius: 3px;
+  .flag {
+    flex: none;
     padding: 3px 6px;
-    letter-spacing: -0.01em;
+    border-radius: 3px;
+    background: var(--li);
+    color: #1a1d22;
+    font-size: 10px;
+    font-weight: 800;
   }
-  .flag[hidden]{ display: none; }
 
-  .count{
+  .span,
+  .count {
     font-family: var(--mono);
-    font-size: 12px;
-    color: var(--dim);
+    font-size: 11px;
     font-weight: 600;
-    min-width: 46px;
+  }
+
+  .span {
+    color: var(--muted);
+  }
+
+  .count {
+    min-width: 54px;
+    color: var(--dim);
     text-align: right;
   }
 
-  /* ---------------- 기본 화면 뷰포트 ---------------- */
-  .stage{
-    flex: 1;
+  .print-button {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 12px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--raised);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s, transform 0.08s;
+  }
+
+  .print-button:hover {
+    border-color: var(--dim);
+    background: #303540;
+  }
+
+  .print-button:active {
+    transform: translateY(1px);
+  }
+
+  .print-button svg {
+    flex: none;
+  }
+
+  /* 메인 편성표 */
+  .stage {
     position: relative;
+    flex: 1;
     min-height: 0;
     overflow: hidden;
   }
 
-  .viewer{
+  .viewer {
     position: absolute;
-    z-index: 1;
     inset: 12px 78px 22px;
     display: flex;
     align-items: center;
     justify-content: center;
+    min-width: 0;
+    min-height: 0;
     overflow: hidden;
   }
 
-  .viewer img{
+  .viewer img {
     display: block;
     width: auto;
     height: auto;
@@ -207,161 +295,208 @@ const WEEKS = [
     max-height: 100%;
     min-width: 0;
     min-height: 0;
-    background: #fff;
     border-radius: 2px;
-    box-shadow: 0 3px 26px rgba(0,0,0,.5);
+    background: #fff;
+    box-shadow: 0 3px 26px rgba(0, 0, 0, 0.5);
     cursor: zoom-in;
     user-select: none;
     -webkit-user-drag: none;
   }
 
-  /* 위치(left/top)는 JS가 실제 이미지 가장자리에 맞춰 계산한다 */
-  .nav{
+  .nav {
     position: absolute;
     z-index: 2;
-    left: 0;
-    transform: translateY(-50%);
+    top: 50%;
     width: 50px;
     height: 116px;
     display: grid;
     place-items: center;
-    background: var(--surface);
-    color: var(--text);
+    transform: translateY(-50%);
     border: 1px solid var(--line);
     border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
     font-size: 30px;
     line-height: 1;
     padding-bottom: 4px;
     cursor: pointer;
-    transition: background .12s, border-color .12s, opacity .12s, left .16s ease, top .16s ease;
   }
-  .nav:hover:not(:disabled){
-    background: var(--raised);
-    border-color: var(--dim);
-  }
-  .nav:disabled{ opacity: .22; cursor: default; }
-  .nav:focus-visible{ outline: 2px solid var(--hit); outline-offset: 2px; }
 
-  .hint{
+  .nav.prev {
+    left: 14px;
+  }
+
+  .nav.next {
+    right: 14px;
+  }
+
+  .nav:hover:not(:disabled) {
+    border-color: var(--dim);
+    background: var(--raised);
+  }
+
+  .nav:disabled {
+    opacity: 0.22;
+    cursor: default;
+  }
+
+  .hint {
     position: absolute;
+    bottom: 7px;
     left: 50%;
-    bottom: 8px;
     transform: translateX(-50%);
+    color: var(--dim);
     font-family: var(--mono);
     font-size: 10px;
-    color: var(--dim);
-    letter-spacing: .04em;
-    pointer-events: none;
+    letter-spacing: 0.03em;
     white-space: nowrap;
+    pointer-events: none;
   }
 
-  .blank{
-    text-align: center;
+  .blank {
     color: var(--muted);
     font-size: 14px;
     line-height: 1.7;
-  }
-  .blank code{
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--hit);
-    background: var(--surface);
-    padding: 2px 6px;
-    border-radius: 3px;
+    text-align: center;
   }
 
-  /* -------- 주차 레일 : A안 (현행 유지 + 높이만 확보) -------- */
-  .rail{
+  .blank code {
+    padding: 2px 6px;
+    border-radius: 3px;
+    background: var(--surface);
+    color: var(--hit);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  /* 하단 주차 레일 */
+  .rail {
     flex: none;
     display: flex;
     align-items: flex-end;
     gap: 26px;
     height: 66px;
     padding: 0 18px 11px;
-    background: var(--surface);
-    border-top: 1px solid var(--line);
     overflow-x: auto;
     overflow-y: hidden;
-  }
-  .group{ display: flex; flex-direction: column; gap: 6px; flex: none; }
-  .group b{
-    font-family: var(--mono); font-size: 10px; font-weight: 700;
-    color: var(--dim); letter-spacing: .1em; padding-left: 1px;
-  }
-  .ticks{ display: flex; gap: 3px; }
-  .tick{
-    position: relative; width: 30px; padding-top: 12px;
-    background: none; border: 0; cursor: pointer;
-    font-family: var(--mono); font-size: 11px; font-weight: 600;
-    color: var(--dim); transition: color .12s;
-  }
-  .tick::before{
-    content: ""; position: absolute; top: 0; left: 0;
-    width: 100%; height: 4px; border-radius: 2px;
-    background: var(--line); transition: background .12s;
-  }
-  .tick:hover{ color: var(--text); }
-  .tick:hover::before{ background: var(--dim); }
-  .tick[aria-current="true"]{ color: #15171B; }
-  .tick[aria-current="true"]::before{ background: var(--ga); }
-  .tick[aria-current="true"] span{
-    background: var(--ga); border-radius: 3px; padding: 1px 0; display: block;
+    border-top: 1px solid var(--line);
+    background: var(--surface);
+    scrollbar-width: thin;
+    scrollbar-color: var(--line) transparent;
   }
 
-  /* 오늘 날짜 빨간 박스 */
-  .tick[data-today="true"] span{
+  .month-group {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .month-group > b {
+    padding-left: 1px;
+    color: var(--dim);
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+  }
+
+  .ticks {
+    display: flex;
+    gap: 3px;
+  }
+
+  .tick {
+    position: relative;
+    width: 30px;
+    padding-top: 12px;
+    border: 0;
+    background: transparent;
+    color: var(--dim);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .tick::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--line);
+  }
+
+  .tick:hover {
+    color: var(--text);
+  }
+
+  .tick:hover::before {
+    background: var(--dim);
+  }
+
+  .tick[aria-current="true"] {
+    color: #15171b;
+  }
+
+  .tick[aria-current="true"]::before {
+    background: var(--ga);
+  }
+
+  .tick[aria-current="true"] span {
     display: block;
     padding: 1px 0;
     border-radius: 3px;
-    box-shadow: 0 0 0 1.5px #FF3B30;
+    background: var(--ga);
   }
 
-  .tick[data-cross="1"]::after{
-    content: ""; position: absolute; top: 0; right: -3px;
-    width: 3px; height: 4px; background: var(--li);
+  .tick[data-today="true"] span {
+    display: block;
+    padding: 1px 0;
+    border-radius: 3px;
+    box-shadow: 0 0 0 1.5px #ff3b30;
   }
-  .tick:focus-visible{ outline: 2px solid var(--hit); outline-offset: 2px; }
 
-  /* ---------------- 전체화면 확대 뷰어 ---------------- */
-  .lightbox[hidden]{ display: none; }
+  .tick[data-cross="true"]::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: -3px;
+    width: 3px;
+    height: 4px;
+    background: var(--li);
+  }
 
-  .lightbox{
+  /* 전체화면 보기 */
+  .lightbox {
     position: fixed;
     z-index: 1000;
     inset: 0;
-    width: 100vw;
-    height: 100vh;
     display: grid;
     grid-template-rows: 54px minmax(0, 1fr);
-    background: rgba(7, 8, 10, .98);
+    width: 100vw;
+    height: 100vh;
+    background: rgba(7, 8, 10, 0.98);
     backdrop-filter: blur(5px);
   }
 
-  /* Fullscreen API로 브라우저 상단바까지 숨긴 모니터 전체화면 */
-  .lightbox:fullscreen,
-  .lightbox:-webkit-full-screen{
-    width: 100vw;
-    height: 100vh;
-    inset: 0;
+  .lightbox::backdrop {
+    background: #07080a;
   }
 
-  .lightbox::backdrop{
-    background: #07080A;
-  }
-
-  .lightbox-bar{
-    position: relative;
-    z-index: 3;
+  .lightbox-bar {
     display: flex;
     align-items: center;
     gap: 14px;
-    min-width: 0;
     padding: 0 16px 0 20px;
-    background: rgba(30, 33, 40, .96);
     border-bottom: 1px solid var(--line);
+    background: rgba(30, 33, 40, 0.96);
   }
 
-  .lightbox-title{
+  .lightbox-title {
     min-width: 0;
     display: flex;
     align-items: baseline;
@@ -369,33 +504,31 @@ const WEEKS = [
     overflow: hidden;
   }
 
-  .lightbox-sheet{
+  .lightbox-sheet {
     flex: none;
     font-size: 15px;
-    font-weight: 700;
-    color: var(--text);
+    font-weight: 750;
   }
 
-  .lightbox-week{
+  .lightbox-week {
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    color: var(--muted);
     font-family: var(--mono);
     font-size: 12px;
-    color: var(--muted);
-  }
-
-  .lightbox-help{
-    margin-left: auto;
-    font-family: var(--mono);
-    font-size: 10px;
-    color: var(--dim);
-    letter-spacing: .02em;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .lightbox-close{
+  .lightbox-help {
+    margin-left: auto;
+    color: var(--dim);
+    font-family: var(--mono);
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  .lightbox-close {
     flex: none;
     width: 38px;
     height: 38px;
@@ -409,17 +542,15 @@ const WEEKS = [
     line-height: 1;
     cursor: pointer;
   }
-  .lightbox-close:hover{ border-color: var(--muted); }
-  .lightbox-close:focus-visible{ outline: 2px solid var(--hit); outline-offset: 2px; }
 
-  .lightbox-stage{
+  .lightbox-stage {
     position: relative;
     min-width: 0;
     min-height: 0;
     overflow: hidden;
   }
 
-  .lightbox-view{
+  .lightbox-view {
     position: absolute;
     inset: 12px 78px 18px;
     display: flex;
@@ -428,10 +559,9 @@ const WEEKS = [
     min-width: 0;
     min-height: 0;
     overflow: hidden;
-    cursor: default;
   }
 
-  .lightbox-view img{
+  .lightbox-view img {
     display: block;
     width: auto;
     height: auto;
@@ -439,41 +569,45 @@ const WEEKS = [
     max-height: 100%;
     min-width: 0;
     min-height: 0;
-    object-fit: contain;
     background: #fff;
-    box-shadow: 0 8px 40px rgba(0,0,0,.65);
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.65);
+    object-fit: contain;
     user-select: none;
     -webkit-user-drag: none;
   }
 
-  .lightbox-nav{
+  .lightbox-nav {
     position: absolute;
     z-index: 2;
     top: 50%;
-    transform: translateY(-50%);
     width: 54px;
     height: 132px;
     display: grid;
     place-items: center;
-    color: var(--text);
-    background: rgba(30, 33, 40, .92);
+    transform: translateY(-50%);
     border: 1px solid var(--line);
     border-radius: 9px;
+    background: rgba(30, 33, 40, 0.92);
+    color: var(--text);
     font-size: 34px;
-    line-height: 1;
     padding-bottom: 4px;
     cursor: pointer;
   }
-  .lightbox-nav.prev{ left: 12px; }
-  .lightbox-nav.next{ right: 12px; }
-  .lightbox-nav:hover:not(:disabled){
-    background: var(--raised);
-    border-color: var(--muted);
-  }
-  .lightbox-nav:disabled{ opacity: .2; cursor: default; }
-  .lightbox-nav:focus-visible{ outline: 2px solid var(--hit); outline-offset: 2px; }
 
-  .lightbox-counter{
+  .lightbox-nav.prev {
+    left: 12px;
+  }
+
+  .lightbox-nav.next {
+    right: 12px;
+  }
+
+  .lightbox-nav:disabled {
+    opacity: 0.2;
+    cursor: default;
+  }
+
+  .lightbox-counter {
     position: absolute;
     z-index: 2;
     right: 18px;
@@ -481,44 +615,167 @@ const WEEKS = [
     padding: 5px 8px;
     border: 1px solid var(--line);
     border-radius: 5px;
-    background: rgba(30, 33, 40, .9);
+    background: rgba(30, 33, 40, 0.9);
+    color: var(--muted);
     font-family: var(--mono);
     font-size: 11px;
     font-weight: 600;
-    color: var(--muted);
     pointer-events: none;
   }
 
-  @media (max-width: 760px){
-    .bar{ gap: 10px; padding: 0 10px; }
-    .divider, .find label, .lightbox-help{ display: none; }
-    .find{ gap: 4px; }
-    select{ font-size: 11px; padding: 5px 4px; }
-    .meta{ gap: 6px; }
-    .span{ display: none; }
-    .viewer{ inset: 10px 48px 20px; }
-    .nav{ width: 38px; height: 90px; }
-    .lightbox-view{ inset: 10px 50px 14px; }
-    .lightbox-nav{ width: 40px; height: 96px; }
-    .lightbox-nav.prev{ left: 5px; }
-    .lightbox-nav.next{ right: 5px; }
-    .lightbox-bar{ padding-left: 12px; }
+  /* 화면에서는 숨기고 인쇄 때만 보이는 전용 영역 */
+  #print-area {
+    display: none;
   }
 
-  @media (prefers-reduced-motion: reduce){
-    *{ transition: none !important; }
+  :focus-visible {
+    outline: 2px solid var(--hit);
+    outline-offset: 2px;
+  }
+
+  @media (max-width: 820px) {
+    .bar {
+      gap: 9px;
+      padding: 0 9px;
+    }
+
+    .divider,
+    .find label,
+    .span,
+    .lightbox-help {
+      display: none;
+    }
+
+    .find {
+      gap: 4px;
+    }
+
+    select {
+      max-width: 74px;
+      padding: 0 4px;
+      font-size: 11px;
+    }
+
+    .meta {
+      gap: 6px;
+    }
+
+    .count {
+      display: none;
+    }
+
+    .print-button {
+      width: 34px;
+      padding: 0;
+    }
+
+    .print-button span {
+      display: none;
+    }
+
+    .viewer {
+      inset: 10px 48px 20px;
+    }
+
+    .nav {
+      width: 38px;
+      height: 90px;
+    }
+
+    .nav.prev {
+      left: 5px;
+    }
+
+    .nav.next {
+      right: 5px;
+    }
+
+    .lightbox-view {
+      inset: 10px 50px 14px;
+    }
+
+    .lightbox-nav {
+      width: 40px;
+      height: 96px;
+    }
+
+    .lightbox-nav.prev {
+      left: 5px;
+    }
+
+    .lightbox-nav.next {
+      right: 5px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      transition: none !important;
+    }
+  }
+
+  /* =========================================================
+     인쇄 전용
+     웹 UI를 전부 숨기고 현재 편성표 이미지 한 장만 출력합니다.
+     ========================================================= */
+  @page {
+    size: A4 landscape;
+    margin: 5mm;
+  }
+
+  @media print {
+    html,
+    body {
+      width: 100% !important;
+      height: auto !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: visible !important;
+      background: #fff !important;
+    }
+
+    body > *:not(#print-area) {
+      display: none !important;
+    }
+
+    #print-area {
+      width: 100% !important;
+      height: 200mm !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: hidden !important;
+      background: #fff !important;
+    }
+
+    #print-image {
+      display: block !important;
+      width: auto !important;
+      height: auto !important;
+      max-width: 100% !important;
+      max-height: 100% !important;
+      margin: 0 auto !important;
+      border: 0 !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      object-fit: contain !important;
+      print-color-adjust: exact !important;
+      -webkit-print-color-adjust: exact !important;
+    }
   }
 </style>
 </head>
 <body>
 
-<div class="bar">
+<header class="bar">
   <div class="tabs" role="tablist" aria-label="시트 선택">
-    <button class="tab" role="tab" id="tab-dept" aria-selected="true" data-sheet="dept">사업부</button>
-    <button class="tab" role="tab" id="tab-team" aria-selected="false" data-sheet="team">팀편성</button>
+    <button class="tab" id="tab-dept" type="button" role="tab" data-sheet="dept" aria-selected="true">사업부</button>
+    <button class="tab" id="tab-team" type="button" role="tab" data-sheet="team" aria-selected="false">팀편성</button>
   </div>
 
-  <div class="divider"></div>
+  <div class="divider" aria-hidden="true"></div>
 
   <div class="find">
     <label for="sel-y">찾기</label>
@@ -531,48 +788,54 @@ const WEEKS = [
     <span class="flag" id="flag" hidden>월 교차</span>
     <span class="span" id="span"></span>
     <span class="count" id="count"></span>
-  </div>
-</div>
 
-<div class="stage">
+    <button class="print-button" id="print-button" type="button" aria-label="현재 편성표 인쇄">
+      <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 9V2h12v7"></path>
+        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+        <rect x="6" y="14" width="12" height="8"></rect>
+      </svg>
+      <span>인쇄</span>
+    </button>
+  </div>
+</header>
+
+<main class="stage">
   <button class="nav prev" id="prev" type="button" aria-label="이전 주">‹</button>
 
   <div class="viewer" id="viewer">
-    <img id="img" alt="">
+    <img id="img" alt="편성표" draggable="false">
     <div class="blank" id="miss" hidden>
       이미지를 찾을 수 없습니다<br>
       <code id="miss-path"></code><br>
-      <span style="font-size:12px">images 폴더에 파일이 있는지 확인하세요</span>
+      <span style="font-size: 12px">images 폴더에 파일이 있는지 확인하세요</span>
     </div>
   </div>
 
   <button class="nav next" id="next" type="button" aria-label="다음 주">›</button>
-  <div class="hint">← → 주 이동 &nbsp;·&nbsp; 1 사업부 &nbsp;·&nbsp; 2 팀편성 &nbsp;·&nbsp; 이미지 클릭하면 모니터 전체화면</div>
-</div>
+  <div class="hint">← → 주 이동 · 1 사업부 · 2 팀편성 · 이미지 클릭 시 전체화면</div>
+</main>
 
-<div class="rail" id="rail" role="tablist" aria-label="주차 이동"></div>
+<nav class="rail" id="rail" aria-label="주차 이동"></nav>
 
-<!-- 이미지 클릭 시 Fullscreen API로 모니터 전체를 채우는 확대 화면 -->
-<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="편성표 전체화면 보기" aria-hidden="true" hidden>
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="편성표 전체화면" aria-hidden="true" hidden>
   <div class="lightbox-bar">
     <div class="lightbox-title">
       <strong class="lightbox-sheet" id="lightbox-sheet"></strong>
       <span class="lightbox-week" id="lightbox-week"></span>
     </div>
-
     <span class="lightbox-help">← → 주 이동 · 1 사업부 · 2 팀편성 · ESC 닫기</span>
     <button class="lightbox-close" id="lightbox-close" type="button" aria-label="전체화면 닫기">×</button>
   </div>
 
-  <div class="lightbox-stage" id="lightbox-stage">
+  <div class="lightbox-stage">
     <button class="lightbox-nav prev" id="lightbox-prev" type="button" aria-label="이전 주">‹</button>
 
-    <div class="lightbox-view" id="lightbox-view">
-      <img id="lightbox-img" alt="">
+    <div class="lightbox-view">
+      <img id="lightbox-img" alt="확대 편성표" draggable="false">
       <div class="blank" id="lightbox-miss" hidden>
         이미지를 찾을 수 없습니다<br>
-        <code id="lightbox-miss-path"></code><br>
-        <span style="font-size:12px">images 폴더에 파일이 있는지 확인하세요</span>
+        <code id="lightbox-miss-path"></code>
       </div>
     </div>
 
@@ -581,420 +844,381 @@ const WEEKS = [
   </div>
 </div>
 
+<!-- 인쇄 시 이 이미지 한 장만 남습니다. -->
+<div id="print-area" aria-hidden="true">
+  <img id="print-image" alt="">
+</div>
+
 <script>
-(function(){
+(function () {
   "use strict";
 
-  const $ = id => document.getElementById(id);
-  const pad = n => String(n).padStart(2, "0");
-  const slug = k => `${k.y}-${pad(k.m)}-${k.w}`;
-  const src = (sheetName, k) => `images/${sheetName}-${slug(k)}.png`;
-  const sheetLabel = sheetName => sheetName === "dept" ? "사업부" : "팀편성";
+  const $ = (id) => document.getElementById(id);
+  const pad = (number) => String(number).padStart(2, "0");
+  const slug = (week) => `${week.y}-${pad(week.m)}-${week.w}`;
+  const imagePath = (sheetName, week) => `images/${sheetName}-${slug(week)}.png`;
+  const sheetLabel = (sheetName) => (sheetName === "dept" ? "사업부" : "팀편성");
 
-  // 연도 → 월 → 주차 순으로 정렬 (오래된 주가 앞)
-  const list = WEEKS.slice().sort((a, b) => a.y - b.y || a.m - b.m || a.w - b.w);
+  const list = WEEKS.slice().sort(
+    (a, b) => a.y - b.y || a.m - b.m || a.w - b.w
+  );
 
-  let idx = list.length - 1;   // 가장 최근 주부터 보여준다
+  let index = Math.max(0, list.length - 1);
   let sheet = "dept";
   let lightboxOpen = false;
   let focusBeforeLightbox = null;
 
-  /* ---------- 주차 레일 ---------- */
-  function buildRail(){
+  function weekContainsToday(week) {
+    const [startText, endText] = week.span.split(" ~ ");
+    if (!startText || !endText) return false;
+
+    const [startMonth, startDay] = startText.split("/").map(Number);
+    const [endMonth, endDay] = endText.split("/").map(Number);
+
+    let startYear = week.y;
+    let endYear = week.y;
+
+    if (startMonth === 12 && endMonth === 1) {
+      if (week.m === 1) startYear -= 1;
+      if (week.m === 12) endYear += 1;
+    }
+
+    const now = Date.now();
+    const start = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0).getTime();
+    const end = new Date(endYear, endMonth - 1, endDay, 23, 59, 59, 999).getTime();
+    return now >= start && now <= end;
+  }
+
+  function buildRail() {
     const rail = $("rail");
     rail.innerHTML = "";
-    let group = null;
-    let key = null;
 
-    const now = new Date();
-    const todayTime = now.getTime();
+    let currentGroupKey = "";
+    let ticks = null;
 
-    list.forEach((k, i) => {
-      const groupKey = `${k.y}-${k.m}`;
+    list.forEach((week, itemIndex) => {
+      const groupKey = `${week.y}-${week.m}`;
 
-      if (groupKey !== key){
-        key = groupKey;
-        group = document.createElement("div");
-        group.className = "group";
+      if (groupKey !== currentGroupKey) {
+        currentGroupKey = groupKey;
+
+        const group = document.createElement("div");
+        group.className = "month-group";
 
         const title = document.createElement("b");
-        title.textContent = `${k.y} · ${pad(k.m)}월`;
+        title.textContent = `${week.y} · ${pad(week.m)}월`;
 
-        const ticks = document.createElement("div");
+        ticks = document.createElement("div");
         ticks.className = "ticks";
 
         group.append(title, ticks);
         rail.append(group);
       }
 
-      const tick = document.createElement("button");
-      tick.className = "tick";
-      tick.type = "button";
-      tick.dataset.i = i;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "tick";
+      button.dataset.index = String(itemIndex);
+      button.dataset.cross = String(Boolean(week.cross));
+      button.title = `${week.y}년 ${pad(week.m)}월 ${week.w}주 · ${week.span}`;
+      button.innerHTML = `<span>${week.w}주</span>`;
 
-      if (k.cross){
-        tick.dataset.cross = "1";
+      if (weekContainsToday(week)) {
+        button.dataset.today = "true";
       }
 
-      tick.title = `${k.y}년 ${pad(k.m)}월 ${k.w}주 · ${k.span}`;
-      tick.innerHTML = `<span>${k.w}주</span>`;
-
-      // 오늘 날짜가 속한 주차 계산
-      const [startStr, endStr] = k.span.split(" ~ ");
-      const [sm, sd] = startStr.split("/").map(Number);
-      const [em, ed] = endStr.split("/").map(Number);
-      let sy = k.y;
-      let ey = k.y;
-
-      if (sm === 12 && em === 1){
-        if (k.m === 1) sy = k.y - 1;
-        if (k.m === 12) ey = k.y + 1;
-      }
-
-      const startTime = new Date(sy, sm - 1, sd, 0, 0, 0).getTime();
-      const endTime = new Date(ey, em - 1, ed, 23, 59, 59).getTime();
-
-      if (todayTime >= startTime && todayTime <= endTime){
-        tick.dataset.today = "true";
-      }
-
-      tick.addEventListener("click", () => go(i));
-      group.lastChild.append(tick);
+      button.addEventListener("click", () => go(itemIndex));
+      ticks.append(button);
     });
   }
 
-  /* ---------- 찾기 드롭다운 ---------- */
-  function fill(select, values, current, format){
+  function setSelect(select, values, selectedValue, formatter) {
     select.innerHTML = "";
 
-    values.forEach(value => {
+    values.forEach((value) => {
       const option = document.createElement("option");
-      option.value = value;
-      option.textContent = format(value);
-
-      if (value === current){
-        option.selected = true;
-      }
-
+      option.value = String(value);
+      option.textContent = formatter(value);
+      option.selected = value === selectedValue;
       select.append(option);
     });
 
     select.disabled = values.length < 2;
   }
 
-  function syncFind(){
-    const k = list[idx];
-    const years = [...new Set(list.map(item => item.y))];
-    const months = [...new Set(list.filter(item => item.y === k.y).map(item => item.m))];
-    const weeks = [...new Set(list.filter(item => item.y === k.y && item.m === k.m).map(item => item.w))];
+  function syncFind() {
+    if (!list.length) return;
 
-    fill($("sel-y"), years, k.y, value => `${value}년`);
-    fill($("sel-m"), months, k.m, value => `${pad(value)}월`);
-    fill($("sel-w"), weeks, k.w, value => `${value}주차`);
+    const week = list[index];
+    const years = [...new Set(list.map((item) => item.y))];
+    const months = [
+      ...new Set(list.filter((item) => item.y === week.y).map((item) => item.m)),
+    ];
+    const weeks = [
+      ...new Set(
+        list
+          .filter((item) => item.y === week.y && item.m === week.m)
+          .map((item) => item.w)
+      ),
+    ];
+
+    setSelect($("sel-y"), years, week.y, (value) => `${value}년`);
+    setSelect($("sel-m"), months, week.m, (value) => `${pad(value)}월`);
+    setSelect($("sel-w"), weeks, week.w, (value) => `${value}주차`);
   }
 
-  function jump(){
-    const y = +$("sel-y").value;
-    const m = +$("sel-m").value;
-    const w = +$("sel-w").value;
+  function jumpFromSelects() {
+    const year = Number($("sel-y").value);
+    const month = Number($("sel-m").value);
+    const weekNumber = Number($("sel-w").value);
 
-    // 현재 선택과 가장 가까운 항목으로 이동 (연/월만 바꿔도 동작)
-    let target = list.findIndex(k => k.y === y && k.m === m && k.w === w);
-    if (target < 0) target = list.findIndex(k => k.y === y && k.m === m);
-    if (target < 0) target = list.findIndex(k => k.y === y);
+    const target = list.findIndex(
+      (item) => item.y === year && item.m === month && item.w === weekNumber
+    );
+
     if (target >= 0) go(target);
   }
 
-  /* ---------- 렌더 ---------- */
-  function currentAlt(){
-    const k = list[idx];
-    return `${k.y}년 ${pad(k.m)}월 ${k.w}주차 ${sheetLabel(sheet)} 편성표`;
+  function handleYearChange() {
+    const selectedYear = Number($("sel-y").value);
+    const firstForYear = list.findIndex((item) => item.y === selectedYear);
+    if (firstForYear >= 0) go(firstForYear);
   }
 
-  function renderMainImage(){
-    const k = list[idx];
-    $("img").hidden = false;
-    $("miss").hidden = true;
-    $("img").src = src(sheet, k);
-    $("img").alt = currentAlt();
+  function handleMonthChange() {
+    const selectedYear = Number($("sel-y").value);
+    const selectedMonth = Number($("sel-m").value);
+    const firstForMonth = list.findIndex(
+      (item) => item.y === selectedYear && item.m === selectedMonth
+    );
+    if (firstForMonth >= 0) go(firstForMonth);
   }
 
-  function renderLightbox(){
-    if (!lightboxOpen) return;
+  function setSheet(nextSheet) {
+    if (nextSheet !== "dept" && nextSheet !== "team") return;
+    sheet = nextSheet;
 
-    const k = list[idx];
-
-    $("lightbox-img").hidden = false;
-    $("lightbox-miss").hidden = true;
-    $("lightbox-img").src = src(sheet, k);
-    $("lightbox-img").alt = currentAlt();
-
-    $("lightbox-sheet").textContent = sheetLabel(sheet);
-    $("lightbox-week").textContent = `${k.y}년 ${pad(k.m)}월 ${k.w}주차 · ${k.span}${k.cross ? " · 월 교차" : ""}`;
-    $("lightbox-counter").textContent = `${idx + 1} / ${list.length}`;
-
-    $("lightbox-prev").disabled = idx === 0;
-    $("lightbox-next").disabled = idx === list.length - 1;
-  }
-
-  function render(){
-    const k = list[idx];
-
-    renderMainImage();
-
-    $("span").textContent = k.span;
-    $("count").textContent = `${idx + 1} / ${list.length}`;
-    $("flag").hidden = !k.cross;
-
-    $("prev").disabled = idx === 0;
-    $("next").disabled = idx === list.length - 1;
-
-    document.querySelectorAll(".tab").forEach(tab => {
-      tab.setAttribute("aria-selected", tab.dataset.sheet === sheet);
+    document.querySelectorAll(".tab").forEach((tab) => {
+      tab.setAttribute("aria-selected", String(tab.dataset.sheet === sheet));
     });
 
-    document.querySelectorAll(".tick").forEach(tick => {
-      tick.setAttribute("aria-current", +tick.dataset.i === idx);
-    });
+    render();
+  }
 
-    document.querySelector(`.tick[data-i="${idx}"]`)
-      ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  function updateImage(element, missingElement, missingPathElement, path, altText) {
+    element.hidden = false;
+    missingElement.hidden = true;
+    element.alt = altText;
+
+    element.onload = () => {
+      element.hidden = false;
+      missingElement.hidden = true;
+    };
+
+    element.onerror = () => {
+      element.hidden = true;
+      missingElement.hidden = false;
+      missingPathElement.textContent = path;
+    };
+
+    element.src = path;
+  }
+
+  function render() {
+    if (!list.length) {
+      $("img").hidden = true;
+      $("miss").hidden = false;
+      $("miss-path").textContent = "등록된 주차가 없습니다";
+      $("prev").disabled = true;
+      $("next").disabled = true;
+      return;
+    }
+
+    const week = list[index];
+    const path = imagePath(sheet, week);
+    const title = `${week.y}년 ${pad(week.m)}월 ${week.w}주 ${sheetLabel(sheet)} 편성표`;
+
+    $("flag").hidden = !week.cross;
+    $("span").textContent = week.span;
+    $("count").textContent = `${index + 1} / ${list.length}`;
+    $("prev").disabled = index <= 0;
+    $("next").disabled = index >= list.length - 1;
+
+    updateImage($("img"), $("miss"), $("miss-path"), path, title);
+    $("print-image").src = path;
+    $("print-image").alt = title;
+
+    document.querySelectorAll(".tick").forEach((tick) => {
+      const selected = Number(tick.dataset.index) === index;
+      tick.setAttribute("aria-current", String(selected));
+      if (selected) {
+        tick.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+      }
+    });
 
     syncFind();
+
+    if (lightboxOpen) {
+      renderLightbox();
+    }
+  }
+
+  function go(nextIndex) {
+    if (!list.length) return;
+    index = Math.max(0, Math.min(list.length - 1, nextIndex));
+    render();
+  }
+
+  function renderLightbox() {
+    if (!list.length) return;
+
+    const week = list[index];
+    const path = imagePath(sheet, week);
+    const title = `${week.y}년 ${pad(week.m)}월 ${week.w}주 ${sheetLabel(sheet)} 편성표`;
+
+    $("lightbox-sheet").textContent = sheetLabel(sheet);
+    $("lightbox-week").textContent = `${week.y}년 ${pad(week.m)}월 ${week.w}주 · ${week.span}`;
+    $("lightbox-counter").textContent = `${index + 1} / ${list.length}`;
+    $("lightbox-prev").disabled = index <= 0;
+    $("lightbox-next").disabled = index >= list.length - 1;
+
+    updateImage(
+      $("lightbox-img"),
+      $("lightbox-miss"),
+      $("lightbox-miss-path"),
+      path,
+      title
+    );
+  }
+
+  async function openLightbox() {
+    if (!$("img").complete || $("img").naturalWidth === 0) return;
+
+    focusBeforeLightbox = document.activeElement;
+    lightboxOpen = true;
+    $("lightbox").hidden = false;
+    $("lightbox").setAttribute("aria-hidden", "false");
     renderLightbox();
+
+    try {
+      if (!document.fullscreenElement && $("lightbox").requestFullscreen) {
+        await $("lightbox").requestFullscreen();
+      }
+    } catch (_error) {
+      // Fullscreen API가 막혀 있어도 일반 오버레이로 계속 표시합니다.
+    }
+
+    $("lightbox-close").focus();
   }
 
-  function go(nextIndex){
-    idx = Math.max(0, Math.min(list.length - 1, nextIndex));
-    render();
-  }
-
-  function selectSheet(nextSheet){
-    if (nextSheet !== "dept" && nextSheet !== "team") return;
-    if (sheet === nextSheet) return;
-    sheet = nextSheet;
-    render();
-  }
-
-  /* ---------- 기본 화면 좌우 버튼 위치 ---------- */
-  const GAP = 14;
-
-  function placeNav(){
-    const stage = document.querySelector(".stage");
-    const prev = $("prev");
-    const next = $("next");
-    const image = $("img");
-    const stageBox = stage.getBoundingClientRect();
-
-    const box = image.hidden || !image.naturalWidth
-      ? $("viewer").getBoundingClientRect()
-      : image.getBoundingClientRect();
-
-    const buttonWidth = prev.offsetWidth || 50;
-    const left = box.left - stageBox.left - GAP - buttonWidth;
-    const right = box.right - stageBox.left + GAP;
-    const centerY = box.top - stageBox.top + box.height / 2;
-
-    prev.style.left = Math.max(4, left) + "px";
-    next.style.left = Math.min(stageBox.width - buttonWidth - 4, right) + "px";
-    prev.style.top = next.style.top = centerY + "px";
-  }
-
-  addEventListener("resize", placeNav);
-
-  if (window.ResizeObserver){
-    new ResizeObserver(placeNav).observe(document.querySelector(".stage"));
-  }
-
-  /* ---------- 모니터 전체화면 열기 / 닫기 ---------- */
-  function fullscreenElement(){
-    return document.fullscreenElement || document.webkitFullscreenElement || null;
-  }
-
-  function finishCloseLightbox(){
+  async function closeLightbox() {
     if (!lightboxOpen) return;
 
     lightboxOpen = false;
+
+    try {
+      if (document.fullscreenElement && document.exitFullscreen) {
+        await document.exitFullscreen();
+      }
+    } catch (_error) {
+      // 종료 실패 시에도 아래에서 오버레이를 닫습니다.
+    }
+
     $("lightbox").hidden = true;
     $("lightbox").setAttribute("aria-hidden", "true");
 
-    // 주차와 사업부/팀편성 상태는 건드리지 않고,
-    // 확대 전에 사용하던 위치와 포커스로 그대로 돌아간다.
-    if (focusBeforeLightbox instanceof HTMLElement){
-      focusBeforeLightbox.focus({ preventScroll: true });
-    }
-
-    focusBeforeLightbox = null;
-  }
-
-  async function openLightbox(){
-    if (lightboxOpen || $("img").hidden) return;
-
-    const lightbox = $("lightbox");
-
-    lightboxOpen = true;
-    focusBeforeLightbox = document.activeElement;
-
-    lightbox.hidden = false;
-    lightbox.setAttribute("aria-hidden", "false");
-    renderLightbox();
-
-    try{
-      // 반드시 이미지 클릭 이벤트 안에서 즉시 호출해야 브라우저가 허용한다.
-      if (lightbox.requestFullscreen){
-        await lightbox.requestFullscreen({ navigationUI: "hide" });
-      } else if (lightbox.webkitRequestFullscreen){
-        lightbox.webkitRequestFullscreen();
-      } else {
-        throw new Error("이 브라우저는 Fullscreen API를 지원하지 않습니다.");
-      }
-
-      $("lightbox-close").focus({ preventScroll: true });
-    } catch (error){
-      console.error("전체화면 진입 실패:", error);
-      finishCloseLightbox();
-      alert("브라우저가 모니터 전체화면 전환을 허용하지 않았습니다. 페이지를 한 번 클릭한 뒤 다시 시도하거나, 브라우저의 전체화면 권한을 확인하세요.");
+    if (focusBeforeLightbox && typeof focusBeforeLightbox.focus === "function") {
+      focusBeforeLightbox.focus();
     }
   }
 
-  async function closeLightbox(){
-    if (!lightboxOpen) return;
+  function printCurrentImage() {
+    const sourceImage = $("img");
 
-    // 닫기 버튼은 먼저 브라우저 전체화면을 종료한다.
-    // 종료 완료 시 fullscreenchange에서 finishCloseLightbox()가 실행된다.
-    if (fullscreenElement()){
-      try{
-        if (document.exitFullscreen){
-          await document.exitFullscreen();
-        } else if (document.webkitExitFullscreen){
-          document.webkitExitFullscreen();
-        }
-        return;
-      } catch (error){
-        console.error("전체화면 종료 실패:", error);
-      }
+    if (!sourceImage.complete || sourceImage.naturalWidth === 0) {
+      alert("편성표 이미지가 아직 준비되지 않았습니다.");
+      return;
     }
 
-    finishCloseLightbox();
-  }
+    const printImage = $("print-image");
+    printImage.src = sourceImage.currentSrc || sourceImage.src;
 
-  function handleFullscreenChange(){
-    // ESC는 브라우저가 직접 처리하므로 keydown이 오지 않을 수 있다.
-    // 전체화면 요소가 사라진 순간 확대 레이어도 닫아 원래 화면으로 복귀한다.
-    if (lightboxOpen && !fullscreenElement()){
-      finishCloseLightbox();
+    const openPrintDialog = () => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => window.print());
+      });
+    };
+
+    if (printImage.complete && printImage.naturalWidth > 0) {
+      openPrintDialog();
+    } else {
+      printImage.onload = openPrintDialog;
+      printImage.onerror = () => alert("인쇄용 이미지를 불러오지 못했습니다.");
     }
   }
 
-  document.addEventListener("fullscreenchange", handleFullscreenChange);
-  document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+  function handleKeyboard(event) {
+    const tagName = document.activeElement?.tagName;
+    if (tagName === "SELECT") return;
 
-  /* ---------- 이미지 오류 / 로드 ---------- */
-  $("img").addEventListener("error", () => {
-    $("img").hidden = true;
-    $("miss").hidden = false;
-    $("miss-path").textContent = src(sheet, list[idx]);
-    placeNav();
-  });
-
-  $("img").addEventListener("load", () => {
-    $("img").hidden = false;
-    $("miss").hidden = true;
-    placeNav();
-  });
-
-  $("lightbox-img").addEventListener("error", () => {
-    $("lightbox-img").hidden = true;
-    $("lightbox-miss").hidden = false;
-    $("lightbox-miss-path").textContent = src(sheet, list[idx]);
-  });
-
-  $("lightbox-img").addEventListener("load", () => {
-    $("lightbox-img").hidden = false;
-    $("lightbox-miss").hidden = true;
-  });
-
-  /* ---------- 마우스 이벤트 ---------- */
-  $("viewer").addEventListener("click", event => {
-    if (event.target === $("img")){
-      openLightbox();
+    if (event.key === "1") {
+      event.preventDefault();
+      setSheet("dept");
+      return;
     }
+
+    if (event.key === "2") {
+      event.preventDefault();
+      setSheet("team");
+      return;
+    }
+
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      go(index - 1);
+      return;
+    }
+
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      go(index + 1);
+      return;
+    }
+
+    if (event.key === "Escape" && lightboxOpen) {
+      event.preventDefault();
+      closeLightbox();
+    }
+  }
+
+  document.querySelectorAll(".tab").forEach((tab) => {
+    tab.addEventListener("click", () => setSheet(tab.dataset.sheet));
   });
 
+  $("sel-y").addEventListener("change", handleYearChange);
+  $("sel-m").addEventListener("change", handleMonthChange);
+  $("sel-w").addEventListener("change", jumpFromSelects);
+
+  $("prev").addEventListener("click", () => go(index - 1));
+  $("next").addEventListener("click", () => go(index + 1));
+  $("lightbox-prev").addEventListener("click", () => go(index - 1));
+  $("lightbox-next").addEventListener("click", () => go(index + 1));
+
+  $("img").addEventListener("click", openLightbox);
   $("lightbox-close").addEventListener("click", closeLightbox);
+  $("print-button").addEventListener("click", printCurrentImage);
 
-  $("lightbox-prev").addEventListener("click", () => go(idx - 1));
-  $("lightbox-next").addEventListener("click", () => go(idx + 1));
-
-  // 편성표 이미지나 버튼이 아닌 어두운 배경을 누르면 닫기
-  $("lightbox-stage").addEventListener("click", event => {
-    if (
-      event.target === $("lightbox-stage") ||
-      event.target === $("lightbox-view")
-    ){
-      closeLightbox();
+  document.addEventListener("keydown", handleKeyboard);
+  document.addEventListener("fullscreenchange", () => {
+    if (lightboxOpen && !document.fullscreenElement) {
+      lightboxOpen = false;
+      $("lightbox").hidden = true;
+      $("lightbox").setAttribute("aria-hidden", "true");
     }
   });
 
-  /* ---------- 기본 화면 이벤트 ---------- */
-  document.querySelectorAll(".tab").forEach(tab => {
-    tab.addEventListener("click", () => selectSheet(tab.dataset.sheet));
-  });
-
-  $("prev").addEventListener("click", () => go(idx - 1));
-  $("next").addEventListener("click", () => go(idx + 1));
-
-  ["sel-y", "sel-m", "sel-w"].forEach(id => {
-    $(id).addEventListener("change", jump);
-  });
-
-  /* ---------- 키보드 ---------- */
-  addEventListener("keydown", event => {
-    const target = event.target;
-
-    if (target instanceof HTMLSelectElement){
-      return;
-    }
-
-    if (event.key === "Escape" && lightboxOpen){
-      closeLightbox();
-      event.preventDefault();
-      return;
-    }
-
-    if (event.key === "ArrowLeft"){
-      go(idx - 1);
-      event.preventDefault();
-      return;
-    }
-
-    if (event.key === "ArrowRight"){
-      go(idx + 1);
-      event.preventDefault();
-      return;
-    }
-
-    if (event.key === "1"){
-      selectSheet("dept");
-      event.preventDefault();
-      return;
-    }
-
-    if (event.key === "2"){
-      selectSheet("team");
-      event.preventDefault();
-    }
-  });
-
-  /* ---------- 시작 ---------- */
-  if (!list.length){
-    document.querySelector(".stage").innerHTML =
-      `<div class="blank">등록된 편성표가 없습니다<br>
-       <span style="font-size:12px">HTML 상단의 <code>WEEKS</code> 배열에 주차를 추가하세요</span></div>`;
-  } else {
-    buildRail();
-    render();
-  }
+  buildRail();
+  render();
 })();
 </script>
 </body>
