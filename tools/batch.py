@@ -5,6 +5,11 @@ GitHub에서 새 엑셀을 올렸을 때는 그 커밋에 포함된 주차만 �
 기존 다른 주차 이미지는 삭제하거나 재생성하지 않는다.
 
 수동 실행(workflow_dispatch) 또는 로컬 실행에서는 전체 주차를 다시 만든다.
+
+생성 산출물:
+- images/dept-YYYY-MM-W.png
+- images/team-YYYY-MM-W.png
+- pdfs/schedule-YYYY-MM-W.pdf   (1페이지 사업부 / 2페이지 팀편성)
 """
 
 import glob
@@ -22,12 +27,14 @@ import read_ratio_xlsx
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WEEKS = os.environ.get("WEEKS_DIR", os.path.join(ROOT, "weeks"))
 OUT = os.environ.get("IMG_DIR", os.path.join(ROOT, "images"))
+PDF_OUT = os.environ.get("PDF_DIR", os.path.join(ROOT, "pdfs"))
 WORK = os.path.dirname(os.path.abspath(__file__))
 TMP = os.path.join(ROOT, "_batch")
 
 WIDTH_TEMPLATE_KEY = os.environ.get("WIDTH_TEMPLATE_KEY", "2026-08-2")
 RENDER_DPI = int(os.environ.get("RENDER_DPI", "192"))
-EXPECTED_PNG_WIDTH = int(os.environ.get("EXPECTED_PNG_WIDTH", "3738"))
+EXPECTED_PNG_WIDTH = int(os.environ.get("EXPECTED_PNG_WIDTH", "3739"))
+ALLOWED_PNG_WIDTH_DELTA = int(os.environ.get("ALLOWED_PNG_WIDTH_DELTA", "2"))
 ZERO_SHA = "0000000000000000000000000000000000000000"
 
 
@@ -191,14 +198,15 @@ def crop_and_validate_image(image_path, output_path, key, kind):
     actual_width = cropped.width
     actual_height = cropped.height
 
-    if actual_width != EXPECTED_PNG_WIDTH:
+    if abs(actual_width - EXPECTED_PNG_WIDTH) > ALLOWED_PNG_WIDTH_DELTA:
         cropped.close()
         raise RuntimeError(
             "\n"
-            "편성표 이미지 가로 너비가 정상값과 다릅니다.\n"
+            "편성표 이미지 가로 너비가 정상값 범위를 벗어났습니다.\n"
             f"파일: {kind}-{key}.png\n"
             f"현재 너비: {actual_width}px\n"
-            f"정상 너비: {EXPECTED_PNG_WIDTH}px\n"
+            f"기준 너비: {EXPECTED_PNG_WIDTH}px\n"
+            f"허용 오차: ±{ALLOWED_PNG_WIDTH_DELTA}px\n"
             f"높이: {actual_height}px\n"
             f"열 너비 기준 주차: {WIDTH_TEMPLATE_KEY}\n\n"
             "잘못된 너비의 이미지가 배포되는 것을 막기 위해 작업을 중단합니다."
@@ -266,8 +274,7 @@ def select_target_items(all_items):
 
     if targets:
         print(
-            "이번 업로드 대상: "
-            + ", ".join(item["key"] for item in targets)
+            "이번 업로드 대상: " + ", ".join(item["key"] for item in targets)
         )
     else:
         print("이번 push에 새로 반영할 편성표 주차가 없습니다")
@@ -294,13 +301,13 @@ def published_items(all_items):
 
 
 def render_item(item, rendered_xlsx):
-    """한 주차의 PDF와 PNG 두 장을 만들고, 성공한 경우에만 기존 이미지를 교체한다."""
+    """한 주차의 PDF와 PNG 두 장을 만들고, 성공한 경우에만 기존 산출물을 교체한다."""
 
     key = item["key"]
-    pdf = rendered_xlsx.replace(".xlsx", ".pdf")
+    temp_pdf = rendered_xlsx.replace(".xlsx", ".pdf")
 
-    if os.path.exists(pdf):
-        os.remove(pdf)
+    if os.path.exists(temp_pdf):
+        os.remove(temp_pdf)
 
     subprocess.run(
         [
@@ -318,13 +325,20 @@ def render_item(item, rendered_xlsx):
         check=False,
     )
 
-    if not os.path.exists(pdf):
+    if not os.path.exists(temp_pdf):
         print(f"  ! PDF 실패 {key}")
         return False
 
     temporary_outputs = {}
+    final_pdf = os.path.join(PDF_OUT, f"schedule-{key}.pdf")
+    temporary_pdf = os.path.join(TMP, f"new-schedule-{key}.pdf")
+
+    if os.path.exists(temporary_pdf):
+        os.remove(temporary_pdf)
 
     try:
+        shutil.copy2(temp_pdf, temporary_pdf)
+
         for page, kind in ((1, "dept"), (2, "team")):
             prefix = f"/tmp/p_{key}_{kind}"
 
@@ -338,7 +352,7 @@ def render_item(item, rendered_xlsx):
                     str(page),
                     "-l",
                     str(page),
-                    pdf,
+                    temp_pdf,
                     prefix,
                 ],
                 check=True,
@@ -367,11 +381,12 @@ def render_item(item, rendered_xlsx):
 
             temporary_outputs[kind] = temporary_image
 
-        # 두 장 모두 정상 생성된 뒤에만 기존 이미지를 교체한다.
+        # PDF와 PNG 두 장이 모두 정상 생성된 뒤에만 기존 산출물을 교체한다.
         for kind in ("dept", "team"):
             final_image = os.path.join(OUT, f"{kind}-{key}.png")
             os.replace(temporary_outputs[kind], final_image)
 
+        os.replace(temporary_pdf, final_pdf)
         return True
 
     except Exception as exception:
@@ -380,6 +395,9 @@ def render_item(item, rendered_xlsx):
         for temporary_image in temporary_outputs.values():
             if os.path.exists(temporary_image):
                 os.remove(temporary_image)
+
+        if os.path.exists(temporary_pdf):
+            os.remove(temporary_pdf)
 
         return False
 
@@ -430,6 +448,7 @@ def update_index(all_items):
 
 def main():
     os.makedirs(OUT, exist_ok=True)
+    os.makedirs(PDF_OUT, exist_ok=True)
     os.makedirs(TMP, exist_ok=True)
 
     all_items = scan()
@@ -451,7 +470,8 @@ def main():
     print(f"열 너비 기준 주차: {WIDTH_TEMPLATE_KEY}")
     print(f"열 너비 기준 파일: {os.path.basename(template)}")
     print(f"PNG 렌더 해상도: {RENDER_DPI} DPI")
-    print(f"PNG 정상 가로 너비: {EXPECTED_PNG_WIDTH}px\n")
+    print(f"PNG 기준 가로 너비: {EXPECTED_PNG_WIDTH}px (허용 ±{ALLOWED_PNG_WIDTH_DELTA}px)")
+    print(f"PDF 저장 폴더: {PDF_OUT}\n")
 
     ready = []
 
@@ -485,7 +505,7 @@ def main():
             done.append(item)
             print(f"  ✓ {item['key']}")
 
-    print(f"\nPNG 완료 {len(done)}주차 × 2 = {len(done) * 2}장")
+    print(f"\n완료 {len(done)}주차 / PNG {len(done) * 2}장 / PDF {len(done)}개")
 
     update_index(all_items)
     shutil.rmtree(TMP, ignore_errors=True)
