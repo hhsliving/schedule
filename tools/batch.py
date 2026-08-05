@@ -26,7 +26,8 @@ WORK = os.path.dirname(os.path.abspath(__file__))
 TMP = os.path.join(ROOT, "_batch")
 
 WIDTH_TEMPLATE_KEY = os.environ.get("WIDTH_TEMPLATE_KEY", "2026-08-2")
-EXPECTED_PNG_WIDTH = int(os.environ.get("EXPECTED_PNG_WIDTH", "1869"))
+RENDER_DPI = int(os.environ.get("RENDER_DPI", "192"))
+EXPECTED_PNG_WIDTH = int(os.environ.get("EXPECTED_PNG_WIDTH", "3738"))
 ZERO_SHA = "0000000000000000000000000000000000000000"
 
 
@@ -332,7 +333,7 @@ def render_item(item, rendered_xlsx):
                     "pdftoppm",
                     "-png",
                     "-r",
-                    "96",
+                    str(RENDER_DPI),
                     "-f",
                     str(page),
                     "-l",
@@ -449,6 +450,7 @@ def main():
     )
     print(f"열 너비 기준 주차: {WIDTH_TEMPLATE_KEY}")
     print(f"열 너비 기준 파일: {os.path.basename(template)}")
+    print(f"PNG 렌더 해상도: {RENDER_DPI} DPI")
     print(f"PNG 정상 가로 너비: {EXPECTED_PNG_WIDTH}px\n")
 
     ready = []
