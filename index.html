@@ -67,6 +67,7 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
   :root {
     --ga: #ffff00;
     --li: #ffc000;
+    --kitchen: #a9d18e;
     --hit: #add8e6;
     --bg: #15171b;
     --surface: #1e2128;
@@ -116,6 +117,8 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
 
   /* 상단 도구 모음 */
   .bar {
+    position: relative;
+    z-index: 5;
     flex: none;
     display: flex;
     align-items: center;
@@ -187,6 +190,46 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.1em;
+  }
+
+  .monthly-tools {
+    position: relative;
+    z-index: 20;
+    flex: none;
+  }
+
+  .monthly-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    height: 30px;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: var(--raised);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 650;
+    cursor: pointer;
+  }
+
+  .monthly-trigger:hover,
+  .monthly-trigger[aria-expanded="true"] {
+    border-color: var(--dim);
+    background: #303540;
+  }
+
+  .monthly-trigger svg {
+    flex: none;
+    width: 15px;
+    height: 15px;
+  }
+
+  .monthly-trigger-chevron {
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 10px;
   }
 
   select {
@@ -277,28 +320,22 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
     flex: none;
   }
 
-  /* 월 누적 비중 + 메인 편성표 */
+  /* 메인 편성표 */
   .stage {
     position: relative;
     flex: 1;
     min-height: 0;
     overflow: hidden;
-    display: grid;
-    grid-template-columns: clamp(210px, 16vw, 250px) minmax(0, 1fr);
-    gap: 14px;
-    padding: 12px 78px 22px 18px;
   }
 
   .viewer {
-    position: relative;
-    grid-column: 2;
-    grid-row: 1;
+    position: absolute;
+    inset: 12px 78px 22px;
     display: flex;
     align-items: center;
     justify-content: center;
     min-width: 0;
     min-height: 0;
-    padding-left: 64px;
     overflow: hidden;
   }
 
@@ -319,53 +356,52 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
   }
 
   .monthly-panel {
-    z-index: 1;
-    grid-column: 1;
-    grid-row: 1;
-    align-self: start;
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    z-index: 21;
     display: flex;
     flex-direction: column;
-    width: 100%;
-    max-height: 100%;
+    width: clamp(320px, 32vw, 430px);
+    max-width: min(430px, calc(100vw - 24px));
+    max-height: min(70vh, 620px);
     overflow: hidden;
     border: 1px solid var(--line);
-    border-radius: 6px;
-    background: rgba(30, 33, 40, 0.96);
-    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.22);
+    border-radius: 7px;
+    background: rgba(30, 33, 40, 0.985);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
   }
 
   .monthly-panel-head {
     flex: none;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
+    gap: 8px;
     min-height: 36px;
     padding: 0 8px 0 10px;
     border-bottom: 1px solid var(--line);
+  }
+
+  .monthly-year {
+    flex: none;
+    width: 76px;
+    height: 26px;
+    padding: 0 5px;
+    font-size: 11px;
   }
 
   .monthly-panel-head h2 {
     color: var(--text);
     font-size: 12px;
     font-weight: 700;
-  }
-
-  .monthly-toggle {
-    display: none;
-    width: 26px;
-    height: 26px;
-    place-items: center;
-    border: 1px solid var(--line);
-    border-radius: 4px;
-    background: var(--raised);
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 15px;
-    cursor: pointer;
+    white-space: nowrap;
   }
 
   .monthly-panel-body {
     min-height: 0;
+    max-height: calc(min(70vh, 620px) - 37px);
     overflow: auto;
     scrollbar-width: thin;
     scrollbar-color: var(--line) transparent;
@@ -409,6 +445,21 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
   .monthly-table th:nth-child(2),
   .monthly-table td:nth-child(2) {
     width: 58px;
+  }
+
+  .monthly-table th:nth-child(3),
+  .monthly-table td:nth-child(3) {
+    background: color-mix(in srgb, var(--ga) 13%, var(--surface));
+  }
+
+  .monthly-table th:nth-child(4),
+  .monthly-table td:nth-child(4) {
+    background: color-mix(in srgb, var(--li) 13%, var(--surface));
+  }
+
+  .monthly-table th:nth-child(5),
+  .monthly-table td:nth-child(5) {
+    background: color-mix(in srgb, var(--kitchen) 16%, var(--surface));
   }
 
   .monthly-table td {
@@ -475,7 +526,7 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
   }
 
   .nav.prev {
-    left: calc(18px + clamp(210px, 16vw, 250px) + 22px);
+    left: 14px;
   }
 
   .nav.next {
@@ -791,8 +842,8 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
 
   @media (max-width: 820px) {
     .bar {
-      gap: 9px;
-      padding: 0 9px;
+      gap: 6px;
+      padding: 0 7px;
     }
 
     .divider,
@@ -802,14 +853,41 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
       display: none;
     }
 
+    .tab {
+      min-width: 54px;
+      padding: 0 8px;
+    }
+
     .find {
       gap: 4px;
     }
 
     select {
-      max-width: 74px;
+      max-width: 58px;
       padding: 0 4px;
       font-size: 11px;
+    }
+
+    .monthly-trigger {
+      width: 32px;
+      padding: 0;
+    }
+
+    .monthly-trigger-label,
+    .monthly-trigger-chevron {
+      display: none;
+    }
+
+    .monthly-panel {
+      position: fixed;
+      top: 54px;
+      left: 8px;
+      width: min(390px, calc(100vw - 16px));
+      max-height: calc(100vh - 70px);
+    }
+
+    .monthly-panel-body {
+      max-height: calc(100vh - 108px);
     }
 
     .meta {
@@ -827,45 +905,6 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
 
     .print-button span {
       display: none;
-    }
-
-    .viewer {
-      position: absolute;
-      inset: 50px 48px 20px;
-      padding-left: 0;
-    }
-
-    .stage {
-      display: block;
-      padding: 0;
-    }
-
-    .monthly-panel {
-      position: absolute;
-      top: 8px;
-      left: 48px;
-      width: min(250px, calc(100vw - 110px));
-      max-height: min(55vh, 420px);
-    }
-
-    .monthly-toggle {
-      display: grid;
-    }
-
-    .monthly-panel[data-collapsed="true"] .monthly-panel-head {
-      border-bottom: 0;
-    }
-
-    .monthly-panel[data-collapsed="true"] .monthly-panel-body {
-      display: none;
-    }
-
-    .monthly-panel-body {
-      max-height: calc(min(55vh, 420px) - 37px);
-    }
-
-    .stage[data-monthly-open="true"] .viewer {
-      inset: calc(min(55vh, 420px) + 12px) 48px 20px;
     }
 
     .nav {
@@ -997,6 +1036,40 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
     <select id="sel-w" aria-label="주차"></select>
   </div>
 
+  <div class="monthly-tools" id="monthly-tools">
+    <button class="monthly-trigger" id="monthly-trigger" type="button" aria-expanded="false" aria-controls="monthly-panel">
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 19V5"></path>
+        <path d="M4 19h17"></path>
+        <path d="M8 15v-4"></path>
+        <path d="M13 15V8"></path>
+        <path d="M18 15V5"></path>
+      </svg>
+      <span class="monthly-trigger-label">월 누적 비중</span>
+      <span class="monthly-trigger-chevron" aria-hidden="true">▾</span>
+    </button>
+    <aside class="monthly-panel" id="monthly-panel" role="dialog" aria-label="월 누적 비중" aria-labelledby="monthly-title" aria-hidden="true" hidden>
+      <header class="monthly-panel-head">
+        <select class="monthly-year" id="monthly-year" aria-label="월 누적 비중 연도"></select>
+        <h2 id="monthly-title">월 누적 비중</h2>
+      </header>
+      <div class="monthly-panel-body">
+        <table class="monthly-table" aria-label="월말 주차 기준 월 누적 비중">
+          <thead>
+            <tr>
+              <th scope="col" aria-sort="ascending"><button class="monthly-sort" type="button" data-sort="month" aria-label="월 기준 정렬">월<span class="monthly-sort-indicator" aria-hidden="true">▲</span></button></th>
+              <th scope="col" aria-sort="none"><button class="monthly-sort" type="button" data-sort="사업부" aria-label="사업부 비중 기준 정렬">사업부<span class="monthly-sort-indicator" aria-hidden="true">↕</span></button></th>
+              <th scope="col" aria-sort="none"><button class="monthly-sort" type="button" data-sort="가전" aria-label="가전 비중 기준 정렬">가전<span class="monthly-sort-indicator" aria-hidden="true">↕</span></button></th>
+              <th scope="col" aria-sort="none"><button class="monthly-sort" type="button" data-sort="리빙" aria-label="리빙 비중 기준 정렬">리빙<span class="monthly-sort-indicator" aria-hidden="true">↕</span></button></th>
+              <th scope="col" aria-sort="none"><button class="monthly-sort" type="button" data-sort="주방" aria-label="주방 비중 기준 정렬">주방<span class="monthly-sort-indicator" aria-hidden="true">↕</span></button></th>
+            </tr>
+          </thead>
+          <tbody id="monthly-ratio-rows"></tbody>
+        </table>
+      </div>
+    </aside>
+  </div>
+
   <div class="meta">
     <span class="flag" id="flag" hidden>월 교차</span>
     <span class="span" id="span"></span>
@@ -1014,29 +1087,6 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
 </header>
 
 <main class="stage" id="stage">
-  <aside class="monthly-panel" id="monthly-panel" aria-labelledby="monthly-title" data-collapsed="false">
-    <header class="monthly-panel-head">
-      <h2 id="monthly-title">월 누적 비중</h2>
-      <button class="monthly-toggle" id="monthly-toggle" type="button" aria-expanded="true" aria-label="월 누적 비중 접기">
-        <span aria-hidden="true">−</span>
-      </button>
-    </header>
-    <div class="monthly-panel-body">
-      <table class="monthly-table" aria-label="월말 주차 기준 월 누적 비중">
-        <thead>
-          <tr>
-            <th scope="col" aria-sort="ascending"><button class="monthly-sort" type="button" data-sort="month" aria-label="월 기준 정렬">월<span class="monthly-sort-indicator" aria-hidden="true">▲</span></button></th>
-            <th scope="col" aria-sort="none"><button class="monthly-sort" type="button" data-sort="사업부" aria-label="사업부 비중 기준 정렬">사업부<span class="monthly-sort-indicator" aria-hidden="true">↕</span></button></th>
-            <th scope="col" aria-sort="none"><button class="monthly-sort" type="button" data-sort="가전" aria-label="가전 비중 기준 정렬">가전<span class="monthly-sort-indicator" aria-hidden="true">↕</span></button></th>
-            <th scope="col" aria-sort="none"><button class="monthly-sort" type="button" data-sort="리빙" aria-label="리빙 비중 기준 정렬">리빙<span class="monthly-sort-indicator" aria-hidden="true">↕</span></button></th>
-            <th scope="col" aria-sort="none"><button class="monthly-sort" type="button" data-sort="주방" aria-label="주방 비중 기준 정렬">주방<span class="monthly-sort-indicator" aria-hidden="true">↕</span></button></th>
-          </tr>
-        </thead>
-        <tbody id="monthly-ratio-rows"></tbody>
-      </table>
-    </div>
-  </aside>
-
   <button class="nav prev" id="prev" type="button" aria-label="이전 주">‹</button>
 
   <div class="viewer" id="viewer">
@@ -1103,6 +1153,13 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
   const list = WEEKS.slice().sort(
     (a, b) => a.y - b.y || a.m - b.m || a.w - b.w
   );
+  const monthlyYears = [
+    ...new Set([
+      ...list.map((week) => week.y),
+      ...MONTHLY_RATIOS.map((row) => Number(row.y)),
+    ]),
+  ].sort((a, b) => a - b);
+  let monthlyYear = monthlyYears.at(-1) ?? new Date().getFullYear();
   let monthlySort = { key: "month", direction: 1 };
 
   let index = Math.max(0, list.length - 1);
@@ -1114,9 +1171,34 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
     return row.y * 12 + row.m;
   }
 
+  function buildMonthlyYearSelect() {
+    const select = $("monthly-year");
+    select.replaceChildren();
+    monthlyYears.forEach((year) => {
+      const option = document.createElement("option");
+      option.value = String(year);
+      option.textContent = `${year}년`;
+      option.selected = year === monthlyYear;
+      select.append(option);
+    });
+  }
+
   function renderMonthlyRatios() {
     const tbody = $("monthly-ratio-rows");
-    const rows = MONTHLY_RATIOS.slice().sort((left, right) => {
+    const storedRows = new Map(
+      MONTHLY_RATIOS
+        .filter((row) => Number(row.y) === monthlyYear)
+        .map((row) => [Number(row.m), row])
+    );
+    const rows = Array.from({ length: 12 }, (_, index) => (
+      storedRows.get(index + 1) ?? {
+        y: monthlyYear,
+        m: index + 1,
+        closing_week: null,
+        span: null,
+        values: null,
+      }
+    )).sort((left, right) => {
       if (monthlySort.key === "month") {
         return monthlySort.direction * (monthSortValue(left) - monthSortValue(right));
       }
@@ -1184,17 +1266,11 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
     });
   }
 
-  function setMonthlyCollapsed(collapsed) {
+  function setMonthlyOpen(open) {
     const panel = $("monthly-panel");
-    const toggle = $("monthly-toggle");
-    panel.dataset.collapsed = String(collapsed);
-    $("stage").dataset.monthlyOpen = String(!collapsed);
-    toggle.setAttribute("aria-expanded", String(!collapsed));
-    toggle.setAttribute(
-      "aria-label",
-      collapsed ? "월 누적 비중 펼치기" : "월 누적 비중 접기"
-    );
-    toggle.querySelector("span").textContent = collapsed ? "+" : "−";
+    panel.hidden = !open;
+    panel.setAttribute("aria-hidden", String(!open));
+    $("monthly-trigger").setAttribute("aria-expanded", String(open));
   }
 
   function weekContainsToday(week) {
@@ -1522,6 +1598,13 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
   }
 
   function handleKeyboard(event) {
+    if (event.key === "Escape" && !$("monthly-panel").hidden) {
+      event.preventDefault();
+      setMonthlyOpen(false);
+      $("monthly-trigger").focus();
+      return;
+    }
+
     const tagName = document.activeElement?.tagName;
     if (tagName === "SELECT") return;
 
@@ -1570,15 +1653,20 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
       renderMonthlyRatios();
     });
   });
-  $("monthly-toggle").addEventListener("click", () => {
-    setMonthlyCollapsed(
-      $("monthly-panel").dataset.collapsed !== "true"
-    );
+  $("monthly-trigger").addEventListener("click", () => {
+    setMonthlyOpen($("monthly-panel").hidden);
   });
-  const mobileLayout = window.matchMedia("(max-width: 820px)");
-  setMonthlyCollapsed(mobileLayout.matches);
-  mobileLayout.addEventListener?.("change", (event) => {
-    setMonthlyCollapsed(event.matches);
+  $("monthly-year").addEventListener("change", () => {
+    monthlyYear = Number($("monthly-year").value);
+    renderMonthlyRatios();
+  });
+  document.addEventListener("pointerdown", (event) => {
+    if (
+      !$("monthly-panel").hidden &&
+      !$("monthly-tools").contains(event.target)
+    ) {
+      setMonthlyOpen(false);
+    }
   });
 
   $("sel-y").addEventListener("change", handleYearChange);
@@ -1604,6 +1692,7 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
   });
 
   buildRail();
+  buildMonthlyYearSelect();
   renderMonthlyRatios();
   render();
 })();
