@@ -12,6 +12,8 @@ GitHub에서 새 엑셀을 올렸을 때는 그 커밋에 포함된 주차만 �
 - pdfs/schedule-YYYY-MM-W.pdf   (1페이지 사업부 / 2페이지 팀편성)
 """
 
+import calendar
+import datetime as dt
 import glob
 import json
 import os
@@ -36,6 +38,13 @@ RENDER_DPI = int(os.environ.get("RENDER_DPI", "192"))
 EXPECTED_PNG_WIDTH = int(os.environ.get("EXPECTED_PNG_WIDTH", "3743"))
 ALLOWED_PNG_WIDTH_DELTA = int(os.environ.get("ALLOWED_PNG_WIDTH_DELTA", "4"))
 ZERO_SHA = "0000000000000000000000000000000000000000"
+
+
+MONTHLY_RATIO_RE = re.compile(r"const MONTHLY_RATIOS = \[.*?\];", re.S)
+SCHEDULE_SPAN_RE = re.compile(
+    r"(?P<sm>\d{1,2})/(?P<sd>\d{1,2})\s*~\s*"
+    r"(?P<em>\d{1,2})/(?P<ed>\d{1,2})"
+)
 
 
 def scan():
@@ -300,6 +309,128 @@ def published_items(all_items):
     return result
 
 
+def schedule_span_dates(item):
+    match = SCHEDULE_SPAN_RE.search(item.get("span", ""))
+    if not match:
+        return None
+
+    values = {key: int(value) for key, value in match.groupdict().items()}
+    start_year = int(item["y"])
+    end_year = int(item["y"])
+    if values["sm"] > values["em"]:
+        if int(item["m"]) == values["em"]:
+            start_year -= 1
+        else:
+            end_year += 1
+
+    try:
+        return (
+            dt.date(start_year, values["sm"], values["sd"]),
+            dt.date(end_year, values["em"], values["ed"]),
+        )
+    except ValueError:
+        return None
+
+
+def month_keys_in_span(item):
+    """Return calendar months covered and month-end keys inside a schedule."""
+
+    bounds = schedule_span_dates(item)
+    if not bounds:
+        return set(), set()
+
+    start, end = bounds
+    covered = set()
+    month_ends = set()
+    day = start
+    while day <= end:
+        key = f"{day.year:04d}-{day.month:02d}"
+        covered.add(key)
+        if day.day == calendar.monthrange(day.year, day.month)[1]:
+            month_ends.add(key)
+        day += dt.timedelta(days=1)
+    return covered, month_ends
+
+
+def monthly_values_for_item(item, year, month):
+    """Read the monthly cumulative column for the report covering month-end."""
+
+    ratio_files = item.get("ratios", [])
+    if not ratio_files:
+        return None
+
+    report_index = 0
+    if item.get("cross") and len(ratio_files) >= 2:
+        bounds = schedule_span_dates(item)
+        if bounds:
+            _start, end = bounds
+            if (year, month) == (end.year, end.month):
+                report_index = 1
+
+    try:
+        _week, month_values = read_ratio_xlsx.read(ratio_files[report_index])
+        departments = {
+            name: month_values[name]
+            for name in read_ratio_xlsx.DEPTS
+        }
+        return {
+            "가전": departments["가전"],
+            "리빙": departments["리빙"],
+            "주방": departments["주방"],
+            "사업부": sum(departments.values()),
+        }
+    except Exception as exception:
+        print(
+            f"  ! {year:04d}-{month:02d} 월말 비중 읽기 실패 "
+            f"({os.path.basename(ratio_files[report_index])}): {exception}"
+        )
+        return None
+
+
+def monthly_ratio_snapshot(all_items, previous_rows, update_items, full_rebuild=False):
+    """Update only calendar-month summaries whose final-day week was uploaded."""
+
+    existing = {
+        f"{int(row['y']):04d}-{int(row['m']):02d}": row
+        for row in previous_rows
+        if isinstance(row, dict) and "y" in row and "m" in row
+    }
+    covered_months = set()
+    closing_items = {}
+    for item in all_items:
+        covered, month_ends = month_keys_in_span(item)
+        covered_months.update(covered)
+        for key in month_ends:
+            closing_items[key] = item
+
+    initialize = full_rebuild or not existing
+    if initialize:
+        update_keys = covered_months
+    else:
+        update_keys = set()
+        for item in update_items or []:
+            _covered, month_ends = month_keys_in_span(item)
+            update_keys.update(month_ends)
+
+    for key in update_keys:
+        year, month = (int(part) for part in key.split("-"))
+        item = closing_items.get(key)
+        values = monthly_values_for_item(item, year, month) if item else None
+        existing[key] = {
+            "y": year,
+            "m": month,
+            "closing_week": (
+                f"{int(item['y']):04d}-{int(item['m']):02d}-{int(item['w'])}"
+                if item
+                else None
+            ),
+            "span": item.get("span") if item else None,
+            "values": values,
+        }
+
+    return sorted(existing.values(), key=lambda row: (int(row["y"]), int(row["m"])))
+
+
 def render_item(item, rendered_xlsx):
     """한 주차의 PDF와 PNG 두 장을 만들고, 성공한 경우에만 기존 산출물을 교체한다."""
 
@@ -402,7 +533,7 @@ def render_item(item, rendered_xlsx):
         return False
 
 
-def update_index(all_items):
+def update_index(all_items, target_items=None):
     """현재 실제 이미지가 존재하는 전체 주차로 index.html 목록을 갱신한다."""
 
     index_items = published_items(all_items)
@@ -428,22 +559,67 @@ def update_index(all_items):
     with open(index_path, encoding="utf-8") as file:
         html = file.read()
 
-    new_html, replace_count = re.subn(
+    new_html, weeks_replace_count = re.subn(
         r"const WEEKS = \[.*?\];",
         lambda _: weeks_array,
         html,
         flags=re.S,
     )
 
-    if replace_count == 0:
+    if weeks_replace_count == 0:
         raise SystemExit("! index.html에서 WEEKS 배열을 찾지 못했습니다")
 
+    monthly_match = MONTHLY_RATIO_RE.search(new_html)
+    if monthly_match:
+        try:
+            previous_monthly = json.loads(monthly_match.group(0).split("=", 1)[1][:-1])
+        except (IndexError, json.JSONDecodeError):
+            previous_monthly = []
+    else:
+        previous_monthly = []
+
+    full_rebuild = (
+        os.environ.get("FULL_REBUILD", "0") == "1"
+        or not os.environ.get("GITHUB_SHA", "").strip()
+        or not previous_monthly
+    )
+    monthly_rows = monthly_ratio_snapshot(
+        all_items,
+        previous_monthly,
+        target_items,
+        full_rebuild=full_rebuild,
+    )
+    monthly_array = (
+        "const MONTHLY_RATIOS = "
+        + json.dumps(monthly_rows, ensure_ascii=False, separators=(",", ":"))
+        + ";"
+    )
+
+    if monthly_match:
+        new_html = MONTHLY_RATIO_RE.sub(
+            lambda _: monthly_array,
+            new_html,
+            count=1,
+        )
+    else:
+        new_html = new_html.replace(
+            "const WEEKS = [",
+            monthly_array + "\nconst WEEKS = [",
+            1,
+        )
+
     if new_html == html:
-        print(f"index.html WEEKS {len(index_items)}주차 — 변경 없음")
+        print(
+            f"index.html WEEKS {len(index_items)}주차 / "
+            f"월 누적 {len(monthly_rows)}개월 — 변경 없음"
+        )
     else:
         with open(index_path, "w", encoding="utf-8") as file:
             file.write(new_html)
-        print(f"index.html WEEKS {len(index_items)}주차 반영")
+        print(
+            f"index.html WEEKS {len(index_items)}주차 / "
+            f"월 누적 {len(monthly_rows)}개월 반영"
+        )
 
 
 def main():
@@ -507,7 +683,7 @@ def main():
 
     print(f"\n완료 {len(done)}주차 / PNG {len(done) * 2}장 / PDF {len(done)}개")
 
-    update_index(all_items)
+    update_index(all_items, target_items)
     shutil.rmtree(TMP, ignore_errors=True)
 
 
