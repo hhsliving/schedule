@@ -1256,11 +1256,14 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
   const pad = (number) => String(number).padStart(2, "0");
   const slug = (week) => `${week.y}-${pad(week.m)}-${week.w}`;
   const VERSION_CHOICES = [
-    { id: "v1", label: "1차안" },
-    { id: "v2", label: "2차안" },
-    { id: "confirmed", label: "확정안" },
-    { id: "final", label: "최종안" },
+    { id: "v1", label: "1차안", shortcut: "Q" },
+    { id: "v2", label: "2차안", shortcut: "W" },
+    { id: "confirmed", label: "확정안", shortcut: "E" },
+    { id: "final", label: "최종안", shortcut: "R" },
   ];
+  const VERSION_SHORTCUTS = Object.fromEntries(
+    VERSION_CHOICES.map((version) => [version.shortcut.toLowerCase(), version.id])
+  );
   const VERSION_DELETE_API = "http://127.0.0.1:8765/api/delete-version";
   const artifactSlug = (week) =>
     `${slug(week)}${activeVersion ? `--${activeVersion}` : ""}`;
@@ -1618,18 +1621,36 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
       button.textContent = label;
       button.disabled = !available.has(id);
       button.setAttribute("aria-pressed", String(activeVersion === id));
+      button.setAttribute("aria-keyshortcuts", buttonShortcut(id));
       button.setAttribute(
         "aria-label",
         available.has(id) ? `${label} 보기` : `${label} 미등록`
       );
-      button.title = available.has(id) ? `${label} 보기` : `${label} 파일 없음`;
+      button.title = available.has(id)
+        ? `${label} 보기 (${buttonShortcut(id)})`
+        : `${label} 파일 없음`;
       button.addEventListener("click", () => {
-        activeVersion = id;
-        render();
+        selectVersion(id);
       });
       controls.append(button);
     });
     controls.append(deleteButton);
+  }
+
+  function buttonShortcut(versionId) {
+    return VERSION_CHOICES.find((version) => version.id === versionId)?.shortcut || "";
+  }
+
+  function selectVersion(versionId) {
+    const week = list[index];
+    if (!week?.versions?.some((version) => version.id === versionId)) {
+      return false;
+    }
+    if (activeVersion !== versionId) {
+      activeVersion = versionId;
+      render();
+    }
+    return true;
   }
 
   function updateImage(element, missingElement, missingPathElement, path, altText) {
@@ -1888,8 +1909,26 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
       return;
     }
 
-    const tagName = document.activeElement?.tagName;
-    if (tagName === "SELECT") return;
+    if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return;
+
+    const activeElement = document.activeElement;
+    const tagName = activeElement?.tagName;
+    if (
+      tagName === "INPUT" ||
+      tagName === "TEXTAREA" ||
+      tagName === "SELECT" ||
+      activeElement?.isContentEditable
+    ) {
+      return;
+    }
+
+    const versionId = VERSION_SHORTCUTS[event.key.toLowerCase()];
+    if (versionId) {
+      if (selectVersion(versionId)) {
+        event.preventDefault();
+      }
+      return;
+    }
 
     if (event.key === "1") {
       event.preventDefault();
