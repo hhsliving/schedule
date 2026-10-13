@@ -20,6 +20,47 @@ def item(year, month, week, span, cross=False, ratios=None):
 
 
 class MonthlyRatioTests(unittest.TestCase):
+    def test_width_template_is_pinned_not_selected_from_week_inputs(self):
+        with patch.dict(os.environ, {"TEMPLATE_XLSX": ""}):
+            template = batch.find_width_template(
+                [{"key": "2026-08-2", "file": "new-narrow-download.xlsx"}]
+            )
+
+        self.assertEqual(template, os.path.abspath(batch.WIDTH_TEMPLATE_PATH))
+        self.assertTrue(os.path.isfile(template))
+
+    def test_explicit_week_range_overrides_full_rebuild(self):
+        values = [
+            (2026, 8, 1),
+            (2026, 8, 2),
+            (2026, 9, 5),
+            (2026, 10, 4),
+            (2026, 10, 5),
+        ]
+        items = [
+            {
+                **item(year, month, week, "08/01 ~ 08/07"),
+                "key": f"{year}-{month:02d}-{week}",
+            }
+            for year, month, week in values
+        ]
+
+        with patch.dict(
+            os.environ,
+            {
+                "WEEKS_START": "2026-08-2",
+                "WEEKS_END": "2026-10-4",
+                "FULL_REBUILD": "1",
+                "GITHUB_SHA": "manual-dispatch",
+            },
+        ):
+            selected = batch.select_target_items(items)
+
+        self.assertEqual(
+            [value["key"] for value in selected],
+            ["2026-08-2", "2026-09-5", "2026-10-4"],
+        )
+
     def test_month_end_week_is_found_across_month_boundary(self):
         value = item(2026, 1, 5, "01/26 ~ 02/01", cross=True)
 

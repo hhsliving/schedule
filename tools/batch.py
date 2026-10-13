@@ -15,6 +15,7 @@ GitHub에서 새 엑셀을 올렸을 때는 그 커밋에 포함된 주차만 �
 import calendar
 import datetime as dt
 import glob
+import hashlib
 import json
 import os
 import re
@@ -33,10 +34,18 @@ PDF_OUT = os.environ.get("PDF_DIR", os.path.join(ROOT, "pdfs"))
 WORK = os.path.dirname(os.path.abspath(__file__))
 TMP = os.path.join(ROOT, "_batch")
 
-WIDTH_TEMPLATE_KEY = os.environ.get("WIDTH_TEMPLATE_KEY", "2026-08-2")
+WIDTH_TEMPLATE_PATH = os.path.join(
+    ROOT, "weeks", "◆ 2026년 08월 2주 편성표 (0803 ~ 0809) (2).xlsx"
+)
+WIDTH_TEMPLATE_SHA256 = (
+    "8975f2be43ef45f062f73f30e35ff1c2d77ab643abfc874f29535f0c58ed0264"
+)
+ACTIVE_WIDTH_TEMPLATE = WIDTH_TEMPLATE_PATH
 RENDER_DPI = int(os.environ.get("RENDER_DPI", "192"))
 EXPECTED_PNG_WIDTH = int(os.environ.get("EXPECTED_PNG_WIDTH", "3743"))
 ALLOWED_PNG_WIDTH_DELTA = int(os.environ.get("ALLOWED_PNG_WIDTH_DELTA", "4"))
+EXPECTED_PNG_HEIGHT = int(os.environ.get("EXPECTED_PNG_HEIGHT", "2203"))
+ALLOWED_PNG_HEIGHT_DELTA = int(os.environ.get("ALLOWED_PNG_HEIGHT_DELTA", "4"))
 ZERO_SHA = "0000000000000000000000000000000000000000"
 
 
@@ -45,6 +54,23 @@ SCHEDULE_SPAN_RE = re.compile(
     r"(?P<sm>\d{1,2})/(?P<sd>\d{1,2})\s*~\s*"
     r"(?P<em>\d{1,2})/(?P<ed>\d{1,2})"
 )
+WEEK_KEY_RE = re.compile(r"(?P<year>\d{4})-(?P<month>\d{1,2})-(?P<week>\d{1,2})")
+
+
+def parse_week_bound(value, label):
+    match = WEEK_KEY_RE.fullmatch((value or "").strip())
+    if not match:
+        raise SystemExit(
+            f"{label} 주차 형식이 올바르지 않습니다: {value!r} "
+            "(예: 2026-08-2)"
+        )
+
+    year, month, week = (
+        int(match.group(name)) for name in ("year", "month", "week")
+    )
+    if not 2000 <= year <= 2100 or not 1 <= month <= 12 or not 1 <= week <= 6:
+        raise SystemExit(f"{label} 주차 범위를 확인하세요: {value!r}")
+    return year, month, week
 
 
 def scan():
@@ -171,23 +197,33 @@ def prep(xlsx, key):
     return output
 
 
-def find_width_template(items):
-    """고정된 기준 주차의 편성표 파일을 찾는다."""
+def find_width_template(_items=None):
+    """Use a pinned known-good layout, independent of refreshed source files."""
 
-    width_template = next(
-        (item for item in items if item["key"] == WIDTH_TEMPLATE_KEY),
-        None,
+    global ACTIVE_WIDTH_TEMPLATE
+    template = os.path.abspath(
+        os.environ.get("TEMPLATE_XLSX") or WIDTH_TEMPLATE_PATH
     )
+    if not os.path.isfile(template):
+        raise SystemExit(f"\n고정 열 너비 기준 엑셀을 찾지 못했습니다:\n{template}\n")
 
-    if width_template is None:
-        available = ", ".join(item["key"] for item in items)
-        raise SystemExit(
-            "\n열 너비 기준 편성표를 찾지 못했습니다.\n"
-            f"기준 주차: {WIDTH_TEMPLATE_KEY}\n"
-            f"현재 주차: {available}\n"
-        )
+    is_pinned_template = os.path.normcase(template) == os.path.normcase(
+        os.path.abspath(WIDTH_TEMPLATE_PATH)
+    )
+    if is_pinned_template:
+        digest = hashlib.sha256()
+        with open(template, "rb") as file:
+            for chunk in iter(lambda: file.read(1024 * 1024), b""):
+                digest.update(chunk)
+        if digest.hexdigest() != WIDTH_TEMPLATE_SHA256:
+            raise SystemExit(
+                "\n고정 열 너비 기준 엑셀이 변경되어 작업을 중단했습니다.\n"
+                f"파일: {template}\n"
+                "기존 3743px 레이아웃을 확인한 뒤 기준을 의도적으로 갱신하세요.\n"
+            )
 
-    return width_template["file"]
+    ACTIVE_WIDTH_TEMPLATE = template
+    return template
 
 
 def crop_and_validate_image(image_path, output_path, key, kind):
@@ -207,18 +243,23 @@ def crop_and_validate_image(image_path, output_path, key, kind):
     actual_width = cropped.width
     actual_height = cropped.height
 
-    if abs(actual_width - EXPECTED_PNG_WIDTH) > ALLOWED_PNG_WIDTH_DELTA:
+    width_delta = abs(actual_width - EXPECTED_PNG_WIDTH)
+    height_delta = abs(actual_height - EXPECTED_PNG_HEIGHT)
+    if (
+        width_delta > ALLOWED_PNG_WIDTH_DELTA
+        or height_delta > ALLOWED_PNG_HEIGHT_DELTA
+    ):
         cropped.close()
         raise RuntimeError(
             "\n"
-            "편성표 이미지 가로 너비가 정상값 범위를 벗어났습니다.\n"
+            "편성표 이미지 크기가 정상값 범위를 벗어났습니다.\n"
             f"파일: {kind}-{key}.png\n"
-            f"현재 너비: {actual_width}px\n"
-            f"기준 너비: {EXPECTED_PNG_WIDTH}px\n"
-            f"허용 오차: ±{ALLOWED_PNG_WIDTH_DELTA}px\n"
-            f"높이: {actual_height}px\n"
-            f"열 너비 기준 주차: {WIDTH_TEMPLATE_KEY}\n\n"
-            "잘못된 너비의 이미지가 배포되는 것을 막기 위해 작업을 중단합니다."
+            f"현재 크기: {actual_width}x{actual_height}px\n"
+            f"기준 크기: {EXPECTED_PNG_WIDTH}x{EXPECTED_PNG_HEIGHT}px\n"
+            f"허용 오차: 너비 ±{ALLOWED_PNG_WIDTH_DELTA}px, "
+            f"높이 ±{ALLOWED_PNG_HEIGHT_DELTA}px\n"
+            f"열 너비 기준 파일: {os.path.basename(ACTIVE_WIDTH_TEMPLATE)}\n\n"
+            "잘못된 크기의 이미지가 배포되는 것을 막기 위해 작업을 중단합니다."
         )
 
     cropped.save(output_path, optimize=True)
@@ -260,6 +301,33 @@ def commits_in_current_push():
 
 def select_target_items(all_items):
     """이번 실행에서 실제로 이미지를 만들 주차만 선택한다."""
+
+    range_start_text = os.environ.get("WEEKS_START", "").strip()
+    range_end_text = os.environ.get("WEEKS_END", "").strip()
+    if range_start_text or range_end_text:
+        if not range_start_text or not range_end_text:
+            raise SystemExit("주차 범위 재생성에는 시작 주차와 종료 주차가 모두 필요합니다.")
+
+        range_start = parse_week_bound(range_start_text, "시작")
+        range_end = parse_week_bound(range_end_text, "종료")
+        if range_start > range_end:
+            raise SystemExit("시작 주차가 종료 주차보다 늦습니다.")
+
+        targets = [
+            item
+            for item in all_items
+            if range_start <= (int(item["y"]), int(item["m"]), int(item["w"])) <= range_end
+        ]
+        if not targets:
+            raise SystemExit(
+                f"지정한 주차 범위에 처리할 편성표가 없습니다: "
+                f"{range_start_text} ~ {range_end_text}"
+            )
+        print(
+            f"주차 범위 재생성: {range_start_text} ~ {range_end_text} "
+            f"({len(targets)}주차)"
+        )
+        return targets
 
     full_rebuild = os.environ.get("FULL_REBUILD", "0") == "1"
     current_sha = os.environ.get("GITHUB_SHA", "").strip()
@@ -578,10 +646,16 @@ def update_index(all_items, target_items=None):
     else:
         previous_monthly = []
 
-    full_rebuild = (
-        os.environ.get("FULL_REBUILD", "0") == "1"
-        or not os.environ.get("GITHUB_SHA", "").strip()
-        or not previous_monthly
+    range_rebuild = bool(
+        os.environ.get("WEEKS_START", "").strip()
+        or os.environ.get("WEEKS_END", "").strip()
+    )
+    full_rebuild = not previous_monthly or (
+        not range_rebuild
+        and (
+            os.environ.get("FULL_REBUILD", "0") == "1"
+            or not os.environ.get("GITHUB_SHA", "").strip()
+        )
     )
     monthly_rows = monthly_ratio_snapshot(
         all_items,
@@ -633,8 +707,20 @@ def main():
         raise SystemExit("처리할 주차가 없습니다")
 
     target_items = select_target_items(all_items)
-    default_template = find_width_template(all_items)
-    template = os.environ.get("TEMPLATE_XLSX", default_template)
+    range_requested = bool(
+        os.environ.get("WEEKS_START", "").strip()
+        or os.environ.get("WEEKS_END", "").strip()
+    )
+    if (
+        not target_items
+        and not range_requested
+        and os.environ.get("GITHUB_SHA", "").strip()
+        and os.environ.get("FULL_REBUILD", "0") != "1"
+    ):
+        print("새 편성표 변경이 없어 이미지와 index 갱신을 건너뜁니다.")
+        return
+
+    template = find_width_template(all_items)
 
     ratio_count = sum(1 for item in target_items if get_ratio(item)[0])
 
@@ -643,10 +729,13 @@ def main():
         f"이번 생성 대상 {len(target_items)}주차 / "
         f"대상 중 비중 있음 {ratio_count}주차"
     )
-    print(f"열 너비 기준 주차: {WIDTH_TEMPLATE_KEY}")
     print(f"열 너비 기준 파일: {os.path.basename(template)}")
     print(f"PNG 렌더 해상도: {RENDER_DPI} DPI")
-    print(f"PNG 기준 가로 너비: {EXPECTED_PNG_WIDTH}px (허용 ±{ALLOWED_PNG_WIDTH_DELTA}px)")
+    print(
+        f"PNG 기준 크기: {EXPECTED_PNG_WIDTH}x{EXPECTED_PNG_HEIGHT}px "
+        f"(허용 너비 ±{ALLOWED_PNG_WIDTH_DELTA}px, "
+        f"높이 ±{ALLOWED_PNG_HEIGHT_DELTA}px)"
+    )
     print(f"PDF 저장 폴더: {PDF_OUT}\n")
 
     ready = []
@@ -682,6 +771,13 @@ def main():
             print(f"  ✓ {item['key']}")
 
     print(f"\n완료 {len(done)}주차 / PNG {len(done) * 2}장 / PDF {len(done)}개")
+    done_keys = {item["key"] for item in done}
+    failed_keys = [item["key"] for item in target_items if item["key"] not in done_keys]
+    if failed_keys:
+        raise SystemExit(
+            "PDF/PNG 생성 실패가 있어 index 갱신을 중단합니다: "
+            + ", ".join(failed_keys)
+        )
 
     update_index(all_items, target_items)
     shutil.rmtree(TMP, ignore_errors=True)
