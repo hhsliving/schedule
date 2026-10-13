@@ -1266,6 +1266,13 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
     `${slug(week)}${activeVersion ? `--${activeVersion}` : ""}`;
   const versionRevision = (week) =>
     week.versions?.find((version) => version.id === activeVersion)?.revision || "";
+  const imagePathForVersion = (sheetName, week, versionId) => {
+    const version = week.versions?.find((item) => item.id === versionId);
+    const artifact = `${slug(week)}${versionId ? `--${versionId}` : ""}`;
+    const revision = version?.revision;
+    const query = revision ? `?v=${encodeURIComponent(revision)}` : "";
+    return `images/${sheetName}-${artifact}.png${query}`;
+  };
   const assetQuery = (week) => {
     const revision = versionRevision(week);
     return revision ? `?v=${encodeURIComponent(revision)}` : "";
@@ -1291,6 +1298,56 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
   let activeVersion = null;
   let lightboxOpen = false;
   let focusBeforeLightbox = null;
+  let serviceWorkerReady;
+  const cachingYears = new Set();
+
+  function cacheYearImages(year) {
+    if (
+      !Number.isInteger(year) ||
+      cachingYears.has(year) ||
+      !("serviceWorker" in navigator) ||
+      !window.isSecureContext
+    ) {
+      return;
+    }
+
+    const yearWeeks = list.filter((week) => week.y === year);
+    if (!yearWeeks.length) return;
+
+    const urls = yearWeeks.flatMap((week) => {
+      const versions =
+        week.versions?.length > 0 ? week.versions : [{ id: null }];
+      return versions.flatMap((version) =>
+        ["dept", "team"].map((sheetName) =>
+          new URL(
+            imagePathForVersion(sheetName, week, version.id),
+            document.baseURI
+          ).href
+        )
+      );
+    });
+    cachingYears.add(year);
+
+    window.setTimeout(() => {
+      if (!serviceWorkerReady) {
+        serviceWorkerReady = navigator.serviceWorker
+          .register("./sw.js", { scope: "./", updateViaCache: "none" })
+          .then(() => navigator.serviceWorker.ready);
+      }
+      serviceWorkerReady
+        .then((registration) => {
+          registration.active?.postMessage({
+            type: "PRECACHE_YEAR_IMAGES",
+            year,
+            urls,
+          });
+        })
+        .catch((error) => {
+          cachingYears.delete(year);
+          console.warn("편성표 이미지 캐시를 시작하지 못했습니다.", error);
+        });
+    }, 250);
+  }
 
   function monthSortValue(row) {
     return row.y * 12 + row.m;
@@ -1638,8 +1695,12 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
     if (!list.length) return;
     const next = Math.max(0, Math.min(list.length - 1, nextIndex));
     if (next !== index) {
+      const previousYear = list[index].y;
       index = next;
       activeVersion = null;
+      if (list[index].y !== previousYear) {
+        cacheYearImages(list[index].y);
+      }
     }
     render();
   }
@@ -1918,6 +1979,9 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
   buildMonthlyYearSelect();
   renderMonthlyRatios();
   render();
+  if (list.length) {
+    cacheYearImages(list[index].y);
+  }
 })();
 </script>
 </body>
