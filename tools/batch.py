@@ -49,6 +49,14 @@ ALLOWED_PNG_HEIGHT_DELTA = int(os.environ.get("ALLOWED_PNG_HEIGHT_DELTA", "4"))
 ZERO_SHA = "0000000000000000000000000000000000000000"
 
 
+VERSION_LABELS = {
+    "v1": "1차안",
+    "v2": "2차안",
+    "confirmed": "확정안",
+    "final": "최종안",
+}
+VERSION_PRIORITIES = {"v1": 1, "v2": 2, "confirmed": 3, "final": 4}
+
 MONTHLY_RATIO_RE = re.compile(r"const MONTHLY_RATIOS = \[.*?\];", re.S)
 SCHEDULE_SPAN_RE = re.compile(
     r"(?P<sm>\d{1,2})/(?P<sd>\d{1,2})\s*~\s*"
@@ -79,8 +87,12 @@ def scan():
     items = pairing.pair(WEEKS, ROOT)
 
     for item in items:
-        item["rkey"] = item["key"]
         item["key"] = f"{item['y']}-{item['m']:02d}-{item['w']}"
+        item["artifact_key"] = (
+            f"{item['key']}--{item['version']}"
+            if item.get("version")
+            else item["key"]
+        )
 
     return items
 
@@ -137,7 +149,7 @@ def get_ratio(item, quiet=True):
 def build(item, template):
     """한 주차의 가공 엑셀을 생성한다."""
 
-    key = item["key"]
+    key = item.get("artifact_key", item["key"])
     output = os.path.join(TMP, f"{key}.xlsx")
 
     environment = dict(
@@ -368,13 +380,30 @@ def select_target_items(all_items):
     return targets
 
 
+def has_version_deletion_commit():
+    """Detect a version deletion so the index can update without render targets."""
+
+    commits = commits_in_current_push()
+    for commit in commits:
+        process = subprocess.run(
+            ["git", "-C", ROOT, "show", "-s", "--format=%s", commit],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+        if process.stdout.strip().startswith("편성표 버전 삭제:"):
+            return True
+    return False
+
+
 def published_items(all_items):
     """사업부/팀 이미지가 모두 존재하는 주차만 반환한다."""
 
     result = []
 
     for item in all_items:
-        key = item["key"]
+        key = item.get("artifact_key", item["key"])
         department_image = os.path.join(OUT, f"dept-{key}.png")
         team_image = os.path.join(OUT, f"team-{key}.png")
 
@@ -384,6 +413,42 @@ def published_items(all_items):
             print(f"  ! 이미지가 없는 주차는 목록에서 제외: {key}")
 
     return result
+
+
+def prune_orphaned_version_artifacts(all_items):
+    """Remove only rendered files whose versioned workbook set was deleted."""
+
+    active = {
+        item.get("artifact_key")
+        for item in all_items
+        if item.get("version") in VERSION_LABELS
+    }
+    patterns = (
+        (
+            OUT,
+            re.compile(
+                r"(?:dept|team)-"
+                r"(\d{4}-\d{2}-\d+--(?:v1|v2|confirmed|final))\.png"
+            ),
+        ),
+        (
+            PDF_OUT,
+            re.compile(
+                r"schedule-"
+                r"(\d{4}-\d{2}-\d+--(?:v1|v2|confirmed|final))\.pdf"
+            ),
+        ),
+    )
+
+    removed = 0
+    for folder, pattern in patterns:
+        for name in os.listdir(folder):
+            match = pattern.fullmatch(name)
+            if match and match.group(1) not in active:
+                os.remove(os.path.join(folder, name))
+                removed += 1
+    if removed:
+        print(f"삭제된 버전의 렌더 파일 {removed}개 정리")
 
 
 def schedule_span_dates(item):
@@ -478,7 +543,11 @@ def monthly_ratio_snapshot(all_items, previous_rows, update_items, full_rebuild=
         covered, month_ends = month_keys_in_span(item)
         covered_months.update(covered)
         for key in month_ends:
-            closing_items[key] = item
+            current = closing_items.get(key)
+            if current is None or VERSION_PRIORITIES.get(
+                item.get("version"), 0
+            ) >= VERSION_PRIORITIES.get(current.get("version"), 0):
+                closing_items[key] = item
 
     initialize = full_rebuild or not existing
     if initialize:
@@ -511,7 +580,7 @@ def monthly_ratio_snapshot(all_items, previous_rows, update_items, full_rebuild=
 def render_item(item, rendered_xlsx):
     """한 주차의 PDF와 PNG 두 장을 만들고, 성공한 경우에만 기존 산출물을 교체한다."""
 
-    key = item["key"]
+    key = item.get("artifact_key", item["key"])
     temp_pdf = rendered_xlsx.replace(".xlsx", ".pdf")
 
     if os.path.exists(temp_pdf):
@@ -611,8 +680,14 @@ def render_item(item, rendered_xlsx):
 
 
 def require_successful_renders(target_items, completed_items):
-    completed_keys = {item["key"] for item in completed_items}
-    failed_keys = [item["key"] for item in target_items if item["key"] not in completed_keys]
+    completed_keys = {
+        item.get("artifact_key", item["key"]) for item in completed_items
+    }
+    failed_keys = [
+        item.get("artifact_key", item["key"])
+        for item in target_items
+        if item.get("artifact_key", item["key"]) not in completed_keys
+    ]
     if failed_keys:
         raise SystemExit(
             "PDF/PNG 생성 실패가 있어 index 갱신을 중단합니다: "
@@ -626,19 +701,55 @@ def update_index(all_items, target_items=None):
     index_items = published_items(all_items)
     index_items.sort(key=lambda item: (item["y"], item["m"], item["w"]))
 
-    lines = [
-        (
-            '  {{ y: {y}, m: {m}, w: {w}, '
-            'span: "{span}", cross: {cross} }}'
-        ).format(
-            y=item["y"],
-            m=item["m"],
-            w=item["w"],
-            span=item["span"],
-            cross="true " if item["cross"] else "false",
+    grouped_items = {}
+    for item in index_items:
+        group = grouped_items.setdefault(
+            item["key"],
+            {
+                "y": item["y"],
+                "m": item["m"],
+                "w": item["w"],
+                "span": item["span"],
+                "cross": item["cross"],
+                "versions": [],
+            },
         )
-        for item in index_items
-    ]
+        version = item.get("version")
+        if version in VERSION_LABELS:
+            group["versions"].append(
+                {
+                    "id": version,
+                    "label": VERSION_LABELS[version],
+                    "revision": item.get("revision")
+                    or item.get("schedule_commit")
+                    or next(iter(item.get("ratio_commits", [])), ""),
+                }
+            )
+
+    version_order = list(VERSION_LABELS)
+    lines = []
+    for item in grouped_items.values():
+        item["versions"].sort(
+            key=lambda version: version_order.index(version["id"])
+        )
+        versions = (
+            ", versions: " + json.dumps(item["versions"], ensure_ascii=False)
+            if item["versions"]
+            else ""
+        )
+        lines.append(
+            (
+                '  {{ y: {y}, m: {m}, w: {w}, '
+                'span: "{span}", cross: {cross}{versions} }}'
+            ).format(
+                y=item["y"],
+                m=item["m"],
+                w=item["w"],
+                span=item["span"],
+                cross="true " if item["cross"] else "false",
+                versions=versions,
+            )
+        )
 
     weeks_array = "const WEEKS = [\n" + ",\n".join(lines) + "\n];"
     index_path = os.path.join(ROOT, "index.html")
@@ -726,12 +837,14 @@ def main():
         raise SystemExit("처리할 주차가 없습니다")
 
     target_items = select_target_items(all_items)
+    version_deletion = has_version_deletion_commit()
     range_requested = bool(
         os.environ.get("WEEKS_START", "").strip()
         or os.environ.get("WEEKS_END", "").strip()
     )
     if (
         not target_items
+        and not version_deletion
         and not range_requested
         and os.environ.get("GITHUB_SHA", "").strip()
         and os.environ.get("FULL_REBUILD", "0") != "1"
@@ -762,12 +875,13 @@ def main():
     for item in target_items:
         ratio, source = get_ratio(item, quiet=False)
         tag = f"비중 {source}" if ratio else "비중 공란"
+        artifact_key = item.get("artifact_key", item["key"])
 
         xlsx = build(item, template)
         if not xlsx:
             continue
 
-        rendered_xlsx = prep(xlsx, item["key"])
+        rendered_xlsx = prep(xlsx, artifact_key)
         if not rendered_xlsx:
             continue
 
@@ -775,6 +889,7 @@ def main():
 
         print(
             f"  {item['key']:<11} "
+            f"{VERSION_LABELS.get(item.get('version'), ''):<5} "
             f"{item['span']:<15} "
             f"{'월교차' if item['cross'] else '      '}  "
             f"{tag}"
@@ -791,6 +906,9 @@ def main():
 
     print(f"\n완료 {len(done)}주차 / PNG {len(done) * 2}장 / PDF {len(done)}개")
     require_successful_renders(target_items, done)
+
+    if version_deletion:
+        prune_orphaned_version_artifacts(all_items)
 
     update_index(all_items, target_items)
     shutil.rmtree(TMP, ignore_errors=True)

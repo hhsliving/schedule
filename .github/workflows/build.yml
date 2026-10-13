@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'weeks/**.xlsx'
+      - 'weeks/**/*.xlsx'
       - 'tools/**.py'
       - '.github/workflows/build.yml'
   workflow_dispatch:

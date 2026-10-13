@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """weeks/ 안의 편성표와 비중 파일을 최신 세트 기준으로 짝짓는다.
 
-동일한 주차의 편성표가 여러 개 있으면 Git 이력상 가장 최근 파일 하나만 사용한다.
-비중 파일도 선택된 최신 편성표와 같은 커밋의 파일을 우선 사용한다.
+기존 weeks/ 루트에서는 동일 주차의 편성표 중 Git 이력상 가장 최근 파일을 사용한다.
+weeks/{주차}/{버전}/ 안에서는 각 버전을 따로 처리한다.
+비중 파일은 버전 폴더 또는 선택된 편성표와 같은 커밋을 기준으로 짝짓는다.
 
 예:
     기존 편성표.xlsx
@@ -11,6 +12,7 @@
     새 비중_새날짜.xlsx
 
 새 편성표와 새 비중을 같은 커밋으로 올리면 새 세트만 사용하고 기존 세트는 무시한다.
+버전 폴더는 서로 독립적으로 보존한다.
 """
 
 import glob
@@ -25,6 +27,8 @@ import read_ratio_xlsx
 
 
 SHEET = "(TV)편성기획"
+VERSION_DIRS = {"v1", "v2", "confirmed", "final"}
+WEEK_FOLDER = re.compile(r"\d{4}-\d{2}-\d+")
 TITLE = re.compile(
     r"◆\s*(\d{4})년\s*(\d{2})월\s*(\d+)주\s*편성표\s*"
     r"\((\d{2})/(\d{2})\s*~\s*(\d{2})/(\d{2})\)"
@@ -87,6 +91,20 @@ def sched_key(path):
             "cross": cross,
         },
     )
+
+
+def version_context(path, weeks_dir):
+    """Return a version id only for files in weeks/{week}/{version}/."""
+
+    relative = os.path.relpath(path, weeks_dir)
+    parts = relative.split(os.sep)
+    if (
+        len(parts) == 3
+        and WEEK_FOLDER.fullmatch(parts[0])
+        and parts[1] in VERSION_DIRS
+    ):
+        return parts[0], parts[1]
+    return None, None
 
 
 def git_info(path, root):
@@ -178,11 +196,12 @@ def load_saved_pairs(store):
 
 
 def select_latest_schedules(schedules):
-    """동일 주차 편성표 중 최신 파일 하나만 남긴다."""
+    """동일 주차·버전 편성표 중 최신 파일 하나만 남긴다."""
 
     grouped = {}
     for schedule in schedules:
-        grouped.setdefault(schedule["key"], []).append(schedule)
+        group = schedule["group"]
+        grouped.setdefault(group, []).append(schedule)
 
     selected = {}
 
@@ -191,7 +210,10 @@ def select_latest_schedules(schedules):
         selected[key] = chosen
 
         if len(candidates) > 1:
-            print(f"  ↻ {key}: 최신 편성표만 사용")
+            print(
+                f"  ↻ {chosen['key']} {chosen.get('version') or ''}: "
+                "최신 편성표만 사용"
+            )
             print(f"      사용: {os.path.basename(chosen['file'])}")
 
             for candidate in candidates:
@@ -208,9 +230,20 @@ def assign_ratio_key(
     saved_pairs,
     weeks_dir,
 ):
-    """비중 파일이 어느 주차에 속하는지 결정한다."""
+    """비중 파일이 어느 주차·버전에 속하는지 결정한다."""
 
     relative_path = os.path.relpath(ratio["file"], weeks_dir)
+    folder_key, folder_version = version_context(ratio["file"], weeks_dir)
+    if folder_version:
+        matching_groups = {
+            schedule["group"]
+            for schedule in selected_schedules.values()
+            if schedule["key"] == folder_key
+            and schedule.get("version") == folder_version
+        }
+        if len(matching_groups) == 1:
+            return matching_groups.pop()
+        return None
 
     # 가장 정확한 규칙: 같은 커밋에 올라온 편성표의 주차를 따른다.
     if ratio.get("commit"):
@@ -219,7 +252,7 @@ def assign_ratio_key(
             for schedule in all_schedules
             if schedule.get("commit") == ratio["commit"]
         ]
-        same_keys = sorted({schedule["key"] for schedule in same_commit})
+        same_keys = sorted({schedule["group"] for schedule in same_commit})
 
         if len(same_keys) == 1:
             return same_keys[0]
@@ -313,7 +346,10 @@ def pair(weeks_dir, root):
 
     files = [
         path
-        for path in glob.glob(os.path.join(weeks_dir, "*.xlsx"))
+        for path in glob.glob(
+            os.path.join(weeks_dir, "**", "*.xlsx"),
+            recursive=True,
+        )
         if not os.path.basename(path).startswith("~$")
     ]
 
@@ -323,6 +359,7 @@ def pair(weeks_dir, root):
     for path in files:
         file_type = classify(path)
         commit_hash, commit_time, commit_rank = git_info(path, root)
+        folder_key, version = version_context(path, weeks_dir)
 
         common = {
             "file": path,
@@ -330,6 +367,7 @@ def pair(weeks_dir, root):
             "commit_time": commit_time,
             "commit_rank": commit_rank,
             "mtime": os.path.getmtime(path),
+            "version": version,
         }
 
         if file_type == "sched":
@@ -342,10 +380,18 @@ def pair(weeks_dir, root):
                 )
                 continue
 
+            if version and folder_key != key:
+                print(
+                    f"  ! {os.path.basename(path)}: "
+                    f"버전 폴더 주차({folder_key})와 A1 주차({key})가 달라 무시"
+                )
+                continue
+
             schedules.append(
                 {
                     **common,
                     "key": key,
+                    "group": f"{key}::{version}" if version else key,
                     "info": info,
                 }
             )
@@ -364,12 +410,15 @@ def pair(weeks_dir, root):
     store = os.path.join(weeks_dir, ".pairs.json")
     saved_pairs = load_saved_pairs(store)
 
-    by_key = {}
-    for key, schedule in selected_schedules.items():
-        by_key[key] = {
+    by_group = {}
+    for group, schedule in selected_schedules.items():
+        key = schedule["key"]
+        by_group[group] = {
             "file": schedule["file"],
             **schedule["info"],
             "key": key,
+            "group": group,
+            "version": schedule.get("version"),
             "ratios": [],
             "schedule_commit": schedule.get("commit"),
             "ratio_commits": [],
@@ -378,7 +427,7 @@ def pair(weeks_dir, root):
         }
 
     for ratio in ratios:
-        key = assign_ratio_key(
+        group = assign_ratio_key(
             ratio=ratio,
             all_schedules=schedules,
             selected_schedules=selected_schedules,
@@ -386,25 +435,25 @@ def pair(weeks_dir, root):
             weeks_dir=weeks_dir,
         )
 
-        if not key:
+        if not group:
             print(
                 f"  ! {os.path.basename(ratio['file'])}: "
                 "어느 편성표의 비중인지 알 수 없어 무시"
             )
             continue
 
-        if key not in by_key:
+        if group not in by_group:
             print(
                 f"  ! {os.path.basename(ratio['file'])}: "
-                f"배정된 주차 {key}의 편성표가 없어 무시"
+                "배정된 주차·버전의 편성표가 없어 무시"
             )
             continue
 
-        by_key[key]["_ratio_records"].append(ratio)
+        by_group[group]["_ratio_records"].append(ratio)
 
     new_saved_pairs = {}
 
-    for key, item in by_key.items():
+    for group, item in by_group.items():
         selected_ratios = select_latest_ratio_set(
             schedule=item["_schedule"],
             ratio_records=item["_ratio_records"],
@@ -418,10 +467,15 @@ def pair(weeks_dir, root):
                 if ratio.get("commit")
             }
         )
+        revision_source = max(
+            [item["_schedule"], *selected_ratios],
+            key=freshness,
+        )
+        item["revision"] = revision_source.get("commit") or ""
 
         for ratio in selected_ratios:
             relative_path = os.path.relpath(ratio["file"], weeks_dir)
-            new_saved_pairs[relative_path] = key
+            new_saved_pairs[relative_path] = group
 
         del item["_schedule"]
         del item["_ratio_records"]
@@ -438,8 +492,13 @@ def pair(weeks_dir, root):
         print(f"  ! .pairs.json 저장 실패: {exception}")
 
     return sorted(
-        by_key.values(),
-        key=lambda item: (item["y"], item["m"], item["w"]),
+        by_group.values(),
+        key=lambda item: (
+            item["y"],
+            item["m"],
+            item["w"],
+            item.get("version") or "",
+        ),
     )
 
 
