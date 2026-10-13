@@ -1636,7 +1636,11 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
 
   function go(nextIndex) {
     if (!list.length) return;
-    index = Math.max(0, Math.min(list.length - 1, nextIndex));
+    const next = Math.max(0, Math.min(list.length - 1, nextIndex));
+    if (next !== index) {
+      index = next;
+      activeVersion = null;
+    }
     render();
   }
 
