@@ -372,10 +372,8 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
   }
 
   .delete-version-button {
-    position: absolute;
-    top: calc(100% + 8px);
-    right: 18px;
-    z-index: 8;
+    flex: none;
+    margin-left: 3px;
     min-width: 34px;
     width: 34px;
     padding: 0;
@@ -956,11 +954,6 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
       font-size: 10px;
     }
 
-    .delete-version-button {
-      top: calc(100% + 8px);
-      right: 7px;
-    }
-
     .find {
       gap: 4px;
     }
@@ -1130,16 +1123,17 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
     <button class="tab" id="tab-team" type="button" role="tab" data-sheet="team" aria-selected="false">팀편성</button>
   </div>
 
-  <div class="version-controls" id="version-controls" role="group" aria-label="편성표 버전" hidden></div>
-  <button class="delete-version-button" id="delete-version-button" type="button" title="선택한 버전 삭제" aria-label="선택한 버전 삭제" hidden>
-    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M3 6h18"></path>
-      <path d="M8 6V4h8v2"></path>
-      <path d="m19 6-1 14H6L5 6"></path>
-      <path d="M10 11v5M14 11v5"></path>
-    </svg>
-    <span>버전 삭제</span>
-  </button>
+  <div class="version-controls" id="version-controls" role="group" aria-label="편성표 버전" hidden>
+    <button class="delete-version-button" id="delete-version-button" type="button" title="선택한 버전 삭제" aria-label="선택한 버전 삭제" hidden>
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 6h18"></path>
+        <path d="M8 6V4h8v2"></path>
+        <path d="m19 6-1 14H6L5 6"></path>
+        <path d="M10 11v5M14 11v5"></path>
+      </svg>
+      <span>버전 삭제</span>
+    </button>
+  </div>
 
   <div class="divider" aria-hidden="true"></div>
 
@@ -1543,14 +1537,15 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
 
   function renderVersionControls(week) {
     const controls = $("version-controls");
+    const deleteButton = $("delete-version-button");
     const versions = week.versions || [];
     const available = new Map(versions.map((version) => [version.id, version]));
 
     controls.hidden = available.size === 0;
-    $("delete-version-button").hidden = available.size === 0;
+    deleteButton.hidden = available.size === 0;
     if (!available.size) {
       activeVersion = null;
-      controls.replaceChildren();
+      controls.replaceChildren(deleteButton);
       return;
     }
 
@@ -1577,6 +1572,7 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
       });
       controls.append(button);
     });
+    controls.append(deleteButton);
   }
 
   function updateImage(element, missingElement, missingPathElement, path, altText) {
