@@ -226,8 +226,30 @@ def find_width_template(_items=None):
     return template
 
 
+def validate_image_dimensions(actual_width, actual_height, key, kind):
+    width_delta = abs(actual_width - EXPECTED_PNG_WIDTH)
+    height_delta = abs(actual_height - EXPECTED_PNG_HEIGHT)
+    if (
+        width_delta <= ALLOWED_PNG_WIDTH_DELTA
+        and height_delta <= ALLOWED_PNG_HEIGHT_DELTA
+    ):
+        return
+
+    raise RuntimeError(
+        "\n"
+        "편성표 이미지 크기가 정상값 범위를 벗어났습니다.\n"
+        f"파일: {kind}-{key}.png\n"
+        f"현재 크기: {actual_width}x{actual_height}px\n"
+        f"기준 크기: {EXPECTED_PNG_WIDTH}x{EXPECTED_PNG_HEIGHT}px\n"
+        f"허용 오차: 너비 ±{ALLOWED_PNG_WIDTH_DELTA}px, "
+        f"높이 ±{ALLOWED_PNG_HEIGHT_DELTA}px\n"
+        f"열 너비 기준 파일: {os.path.basename(ACTIVE_WIDTH_TEMPLATE)}\n\n"
+        "잘못된 크기의 이미지가 배포되는 것을 막기 위해 작업을 중단합니다."
+    )
+
+
 def crop_and_validate_image(image_path, output_path, key, kind):
-    """PDF 변환 이미지를 자르고 가로 너비를 검증한다."""
+    """PDF 변환 이미지를 자르고 전체 크기를 검증한다."""
 
     from PIL import Image
 
@@ -243,24 +265,11 @@ def crop_and_validate_image(image_path, output_path, key, kind):
     actual_width = cropped.width
     actual_height = cropped.height
 
-    width_delta = abs(actual_width - EXPECTED_PNG_WIDTH)
-    height_delta = abs(actual_height - EXPECTED_PNG_HEIGHT)
-    if (
-        width_delta > ALLOWED_PNG_WIDTH_DELTA
-        or height_delta > ALLOWED_PNG_HEIGHT_DELTA
-    ):
+    try:
+        validate_image_dimensions(actual_width, actual_height, key, kind)
+    except RuntimeError:
         cropped.close()
-        raise RuntimeError(
-            "\n"
-            "편성표 이미지 크기가 정상값 범위를 벗어났습니다.\n"
-            f"파일: {kind}-{key}.png\n"
-            f"현재 크기: {actual_width}x{actual_height}px\n"
-            f"기준 크기: {EXPECTED_PNG_WIDTH}x{EXPECTED_PNG_HEIGHT}px\n"
-            f"허용 오차: 너비 ±{ALLOWED_PNG_WIDTH_DELTA}px, "
-            f"높이 ±{ALLOWED_PNG_HEIGHT_DELTA}px\n"
-            f"열 너비 기준 파일: {os.path.basename(ACTIVE_WIDTH_TEMPLATE)}\n\n"
-            "잘못된 크기의 이미지가 배포되는 것을 막기 위해 작업을 중단합니다."
-        )
+        raise
 
     cropped.save(output_path, optimize=True)
     cropped.close()
@@ -601,6 +610,16 @@ def render_item(item, rendered_xlsx):
         return False
 
 
+def require_successful_renders(target_items, completed_items):
+    completed_keys = {item["key"] for item in completed_items}
+    failed_keys = [item["key"] for item in target_items if item["key"] not in completed_keys]
+    if failed_keys:
+        raise SystemExit(
+            "PDF/PNG 생성 실패가 있어 index 갱신을 중단합니다: "
+            + ", ".join(failed_keys)
+        )
+
+
 def update_index(all_items, target_items=None):
     """현재 실제 이미지가 존재하는 전체 주차로 index.html 목록을 갱신한다."""
 
@@ -771,13 +790,7 @@ def main():
             print(f"  ✓ {item['key']}")
 
     print(f"\n완료 {len(done)}주차 / PNG {len(done) * 2}장 / PDF {len(done)}개")
-    done_keys = {item["key"] for item in done}
-    failed_keys = [item["key"] for item in target_items if item["key"] not in done_keys]
-    if failed_keys:
-        raise SystemExit(
-            "PDF/PNG 생성 실패가 있어 index 갱신을 중단합니다: "
-            + ", ".join(failed_keys)
-        )
+    require_successful_renders(target_items, done)
 
     update_index(all_items, target_items)
     shutil.rmtree(TMP, ignore_errors=True)

@@ -61,6 +61,22 @@ class MonthlyRatioTests(unittest.TestCase):
             ["2026-08-2", "2026-09-5", "2026-10-4"],
         )
 
+    def test_image_size_guard_keeps_the_known_good_canvas(self):
+        batch.validate_image_dimensions(3743, 2203, "2026-08-2", "dept")
+
+        with self.assertRaisesRegex(RuntimeError, "3743x2203px"):
+            batch.validate_image_dimensions(2600, 2203, "2026-08-2", "dept")
+
+        with self.assertRaisesRegex(RuntimeError, "3743x2203px"):
+            batch.validate_image_dimensions(3743, 2100, "2026-08-2", "team")
+
+    def test_partial_render_failure_blocks_index_completion(self):
+        targets = [{"key": "2026-08-2"}, {"key": "2026-08-3"}]
+        completed = [{"key": "2026-08-2"}]
+
+        with self.assertRaisesRegex(SystemExit, "2026-08-3"):
+            batch.require_successful_renders(targets, completed)
+
     def test_month_end_week_is_found_across_month_boundary(self):
         value = item(2026, 1, 5, "01/26 ~ 02/01", cross=True)
 

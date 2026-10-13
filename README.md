@@ -163,3 +163,7 @@ python3 tools/batch.py
 - **기본 스타일 폰트** : openpyxl 이 저장 시 기본 스타일의 폰트 참조를 바꿔버려
   같은 열 너비라도 렌더 폭이 달라집니다(Arial 9 → 1546px / Calibri 12 → 1869px).
   `build_sheet.py` 가 저장 후 Calibri 12 로 고정해 전 주차 1869px 로 통일합니다.
+
+이미지 생성 workflow를 특정 주차 범위로 다시 실행할 때는 `week_start`와 `week_end`를 지정합니다.
+예: `2026-08-2`부터 `2026-10-4`. 동일 범위는 push 커밋 제목
+`[rebuild-range] 2026-08-2..2026-10-4`로도 지정할 수 있습니다.
