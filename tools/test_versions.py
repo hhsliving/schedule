@@ -101,6 +101,12 @@ class VersionPairingTests(unittest.TestCase):
 
 
 class VersionIndexTests(unittest.TestCase):
+    def test_version_labels_match_teams_stage_names(self):
+        self.assertEqual(batch.VERSION_LABELS["v1"], "1차 가안")
+        self.assertEqual(batch.VERSION_LABELS["v2"], "2차 가안")
+        self.assertEqual(batch.VERSION_LABELS["confirmed"], "확정안")
+        self.assertEqual(batch.VERSION_LABELS["final"], "최종안")
+
     def test_deletion_commit_is_detected_without_render_targets(self):
         with (
             patch.object(
@@ -111,7 +117,7 @@ class VersionIndexTests(unittest.TestCase):
             patch.object(
                 batch.subprocess,
                 "run",
-                return_value=Mock(stdout="편성표 버전 삭제: 2026-10-5 1차안\n"),
+                return_value=Mock(stdout="편성표 버전 삭제: 2026-10-5 1차 가안\n"),
             ),
         ):
             self.assertTrue(batch.has_version_deletion_commit())
