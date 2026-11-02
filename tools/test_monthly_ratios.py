@@ -70,13 +70,18 @@ class MonthlyRatioTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "3743x2203px"):
             batch.validate_image_dimensions(3743, 2100, "2026-08-2", "team")
 
-    def test_small_horizontal_raster_overflow_scales_to_known_canvas(self):
+    def test_raster_content_fits_the_known_canvas_without_cropping(self):
         self.assertEqual(
-            batch.normalized_width_for_small_overflow(3774),
-            3743,
+            batch.fit_inside_canvas(3774, 2203),
+            (3743, 2185),
         )
-        self.assertIsNone(batch.normalized_width_for_small_overflow(3747))
-        self.assertIsNone(batch.normalized_width_for_small_overflow(3784))
+        self.assertEqual(
+            batch.fit_inside_canvas(3743, 2203),
+            (3743, 2203),
+        )
+
+        with self.assertRaises(ValueError):
+            batch.fit_inside_canvas(0, 2203)
 
     def test_partial_render_failure_blocks_index_completion(self):
         targets = [{"key": "2026-08-2"}, {"key": "2026-08-3"}]
