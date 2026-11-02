@@ -70,6 +70,14 @@ class MonthlyRatioTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "3743x2203px"):
             batch.validate_image_dimensions(3743, 2100, "2026-08-2", "team")
 
+    def test_small_horizontal_raster_overflow_scales_to_known_canvas(self):
+        self.assertEqual(
+            batch.normalized_width_for_small_overflow(3774),
+            3743,
+        )
+        self.assertIsNone(batch.normalized_width_for_small_overflow(3747))
+        self.assertIsNone(batch.normalized_width_for_small_overflow(3784))
+
     def test_partial_render_failure_blocks_index_completion(self):
         targets = [{"key": "2026-08-2"}, {"key": "2026-08-3"}]
         completed = [{"key": "2026-08-2"}]

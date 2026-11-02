@@ -44,6 +44,7 @@ ACTIVE_WIDTH_TEMPLATE = WIDTH_TEMPLATE_PATH
 RENDER_DPI = int(os.environ.get("RENDER_DPI", "192"))
 EXPECTED_PNG_WIDTH = int(os.environ.get("EXPECTED_PNG_WIDTH", "3743"))
 ALLOWED_PNG_WIDTH_DELTA = int(os.environ.get("ALLOWED_PNG_WIDTH_DELTA", "4"))
+MAX_WIDTH_NORMALIZATION_PX = 40
 EXPECTED_PNG_HEIGHT = int(os.environ.get("EXPECTED_PNG_HEIGHT", "2203"))
 ALLOWED_PNG_HEIGHT_DELTA = int(os.environ.get("ALLOWED_PNG_HEIGHT_DELTA", "4"))
 ZERO_SHA = "0000000000000000000000000000000000000000"
@@ -260,6 +261,15 @@ def validate_image_dimensions(actual_width, actual_height, key, kind):
     )
 
 
+def normalized_width_for_small_overflow(actual_width):
+    """Return the known canvas width for small horizontal raster overflow."""
+
+    overflow = actual_width - EXPECTED_PNG_WIDTH
+    if ALLOWED_PNG_WIDTH_DELTA < overflow <= MAX_WIDTH_NORMALIZATION_PX:
+        return EXPECTED_PNG_WIDTH
+    return None
+
+
 def crop_and_validate_image(image_path, output_path, key, kind):
     """PDF 변환 이미지를 자르고 전체 크기를 검증한다."""
 
@@ -273,6 +283,22 @@ def crop_and_validate_image(image_path, output_path, key, kind):
         ).convert("L").getbbox()
 
         cropped = image.crop(bbox) if bbox else image.copy()
+        image.close()
+
+    normalized_width = normalized_width_for_small_overflow(cropped.width)
+    if normalized_width is not None:
+        before_width = cropped.width
+        resampling = getattr(Image, "Resampling", Image)
+        normalized = cropped.resize(
+            (normalized_width, cropped.height),
+            resampling.LANCZOS,
+        )
+        cropped.close()
+        cropped = normalized
+        print(
+            f"  폭 미세 보정: {before_width}px → {normalized_width}px "
+            "(기준 캔버스)"
+        )
 
     actual_width = cropped.width
     actual_height = cropped.height
