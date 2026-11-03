@@ -792,17 +792,18 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
   }
 
   #rail[data-density="bars"] .tick {
-    width: 16px;
-    height: 22px;
+    width: 9px;
+    height: 26px;
     padding: 0;
     font-size: 0;
   }
 
   #rail[data-density="bars"] .tick::before {
-    top: 8px;
-    left: 2px;
-    width: 12px;
-    height: 4px;
+    top: 2px;
+    left: 3px;
+    width: 3px;
+    height: 20px;
+    border-radius: 2px;
   }
 
   #rail[data-density="bars"] .tick[aria-current="true"] span,
@@ -822,48 +823,10 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
   }
 
   #rail[data-density="bars"] .tick[data-cross="true"]::after {
-    top: 6px;
-    right: 1px;
-  }
-
-  #rail[data-layout="grid"] {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    align-content: center;
-    align-items: center;
-    justify-content: stretch;
-    gap: 8px 14px;
-    height: auto;
-    min-height: 92px;
-    padding: 10px 14px;
-    overflow-x: hidden;
-    overflow-y: auto;
-  }
-
-  #rail[data-layout="grid"] .month-group {
-    justify-self: center;
-    gap: 4px;
-    max-width: 100%;
-  }
-
-  #rail[data-layout="grid"] .month-group[data-empty="true"] {
-    min-width: 88px;
-    min-height: 44px;
-    justify-content: center;
-    opacity: 0.42;
-  }
-
-  #rail[data-layout="grid"] .ticks {
-    gap: 2px;
-  }
-
-  @media (max-width: 820px) {
-    #rail[data-layout="grid"] {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 8px 4px;
-      padding-right: 8px;
-      padding-left: 8px;
-    }
+    top: 1px;
+    right: 0;
+    width: 2px;
+    height: 3px;
   }
 
   /* 전체화면 보기 */
@@ -1593,16 +1556,9 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
     const rail = $("rail");
     if (!rail.children.length) return;
 
-    rail.dataset.layout = "row";
     rail.dataset.density = "labels";
-    if (
-      rail.clientWidth > 1500 &&
-      rail.scrollWidth <= rail.clientWidth + 1
-    ) {
-      return;
-    }
+    if (rail.scrollWidth <= rail.clientWidth + 1) return;
 
-    rail.dataset.layout = "grid";
     rail.dataset.density = "bars";
   }
 
@@ -1612,11 +1568,9 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
 
     let currentGroupKey = "";
     let ticks = null;
-    let lastWeek = null;
 
     list.forEach((week, itemIndex) => {
       const groupKey = `${week.y}-${week.m}`;
-      lastWeek = week;
 
       if (groupKey !== currentGroupKey) {
         currentGroupKey = groupKey;
@@ -1661,35 +1615,6 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
       button.addEventListener("click", () => go(itemIndex));
       ticks.append(button);
     });
-
-    if (lastWeek && lastWeek.m < 12) {
-      for (let month = lastWeek.m + 1; month <= 12; month += 1) {
-        const group = document.createElement("div");
-        group.className = "month-group";
-        group.dataset.empty = "true";
-        group.setAttribute("role", "group");
-        group.setAttribute(
-          "aria-label",
-          `${lastWeek.y}년 ${pad(month)}월 등록된 주차 없음`
-        );
-
-        const title = document.createElement("b");
-        const year = document.createElement("span");
-        year.className = "month-year";
-        year.textContent = `${lastWeek.y} · `;
-
-        const fullMonth = document.createElement("span");
-        fullMonth.className = "month-full";
-        fullMonth.textContent = `${pad(month)}월`;
-
-        const shortMonth = document.createElement("span");
-        shortMonth.className = "month-short";
-        shortMonth.textContent = `${month}월`;
-        title.append(year, fullMonth, shortMonth);
-        group.append(title);
-        rail.append(group);
-      }
-    }
 
     fitRailDensity();
   }
