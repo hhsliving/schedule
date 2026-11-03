@@ -1,7 +1,10 @@
 import os
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
+
+from PIL import Image
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -70,18 +73,38 @@ class MonthlyRatioTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "3743x2203px"):
             batch.validate_image_dimensions(3743, 2100, "2026-08-2", "team")
 
-    def test_raster_content_fits_the_known_canvas_without_cropping(self):
+    def test_small_width_overflow_is_normalized(self):
         self.assertEqual(
-            batch.fit_inside_canvas(3774, 2203),
-            (3743, 2185),
+            batch.normalized_width_for_small_overflow(3774),
+            3743,
         )
         self.assertEqual(
-            batch.fit_inside_canvas(3743, 2203),
-            (3743, 2203),
+            batch.normalized_width_for_small_overflow(3743),
+            None,
         )
+        self.assertIsNone(batch.normalized_width_for_small_overflow(3784))
 
-        with self.assertRaises(ValueError):
-            batch.fit_inside_canvas(0, 2203)
+    def test_width_normalization_keeps_table_at_canvas_edges(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source_path = os.path.join(directory, "source.png")
+            output_path = os.path.join(directory, "output.png")
+            Image.new("RGB", (45, 22), "black").save(source_path)
+
+            with (
+                patch.object(batch, "EXPECTED_PNG_WIDTH", 37),
+                patch.object(batch, "EXPECTED_PNG_HEIGHT", 22),
+            ):
+                batch.crop_and_validate_image(
+                    source_path,
+                    output_path,
+                    "2026-08-2",
+                    "team",
+                )
+
+            with Image.open(output_path) as result:
+                self.assertEqual(result.size, (37, 22))
+                self.assertEqual(result.getpixel((0, 0)), (0, 0, 0))
+                self.assertEqual(result.getpixel((36, 21)), (0, 0, 0))
 
     def test_partial_render_failure_blocks_index_completion(self):
         targets = [{"key": "2026-08-2"}, {"key": "2026-08-3"}]

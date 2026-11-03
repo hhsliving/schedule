@@ -44,6 +44,7 @@ ACTIVE_WIDTH_TEMPLATE = WIDTH_TEMPLATE_PATH
 RENDER_DPI = int(os.environ.get("RENDER_DPI", "192"))
 EXPECTED_PNG_WIDTH = int(os.environ.get("EXPECTED_PNG_WIDTH", "3743"))
 ALLOWED_PNG_WIDTH_DELTA = int(os.environ.get("ALLOWED_PNG_WIDTH_DELTA", "4"))
+MAX_WIDTH_NORMALIZATION_PX = 40
 EXPECTED_PNG_HEIGHT = int(os.environ.get("EXPECTED_PNG_HEIGHT", "2203"))
 ALLOWED_PNG_HEIGHT_DELTA = int(os.environ.get("ALLOWED_PNG_HEIGHT_DELTA", "4"))
 ZERO_SHA = "0000000000000000000000000000000000000000"
@@ -260,20 +261,13 @@ def validate_image_dimensions(actual_width, actual_height, key, kind):
     )
 
 
-def fit_inside_canvas(source_width, source_height):
-    """Scale content proportionally so it fits the known PNG canvas."""
+def normalized_width_for_small_overflow(actual_width):
+    """Return the known canvas width for small horizontal raster overflow."""
 
-    if source_width <= 0 or source_height <= 0:
-        raise ValueError("이미지 크기가 올바르지 않습니다")
-
-    scale = min(
-        EXPECTED_PNG_WIDTH / source_width,
-        EXPECTED_PNG_HEIGHT / source_height,
-    )
-    return (
-        max(1, round(source_width * scale)),
-        max(1, round(source_height * scale)),
-    )
+    overflow = actual_width - EXPECTED_PNG_WIDTH
+    if ALLOWED_PNG_WIDTH_DELTA < overflow <= MAX_WIDTH_NORMALIZATION_PX:
+        return EXPECTED_PNG_WIDTH
+    return None
 
 
 def crop_and_validate_image(image_path, output_path, key, kind):
@@ -291,39 +285,20 @@ def crop_and_validate_image(image_path, output_path, key, kind):
         cropped = image.crop(bbox) if bbox else image.copy()
         image.close()
 
-    source_width, source_height = cropped.size
-    fitted_width, fitted_height = fit_inside_canvas(
-        source_width,
-        source_height,
-    )
-    if (fitted_width, fitted_height) != cropped.size:
-        resampling = (
-            Image.Resampling.LANCZOS
-            if hasattr(Image, "Resampling")
-            else Image.LANCZOS
-        )
+    normalized_width = normalized_width_for_small_overflow(cropped.width)
+    if normalized_width is not None:
+        before_width = cropped.width
+        resampling = getattr(Image, "Resampling", Image)
         resized = cropped.resize(
-            (fitted_width, fitted_height),
-            resampling,
-        )
-        normalized = Image.new(
-            "RGB",
-            (EXPECTED_PNG_WIDTH, EXPECTED_PNG_HEIGHT),
-            "white",
-        )
-        offset = (
-            (EXPECTED_PNG_WIDTH - fitted_width) // 2,
-            (EXPECTED_PNG_HEIGHT - fitted_height) // 2,
-        )
-        normalized.paste(resized, offset)
-        print(
-            f"  기존 캔버스에 맞춤: {source_width}x{source_height}px → "
-            f"{EXPECTED_PNG_WIDTH}x{EXPECTED_PNG_HEIGHT}px "
-            f"(표 {fitted_width}x{fitted_height}px, 비율 유지)"
+            (normalized_width, cropped.height),
+            resampling.LANCZOS,
         )
         cropped.close()
-        resized.close()
-        cropped = normalized
+        cropped = resized
+        print(
+            f"  폭 미세 보정: {before_width}px → {normalized_width}px "
+            "(기준 캔버스)"
+        )
 
     actual_width = cropped.width
     actual_height = cropped.height
