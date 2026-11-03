@@ -663,9 +663,9 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
     flex: none;
     display: flex;
     align-items: flex-end;
-    gap: 26px;
+    gap: 14px;
     height: 66px;
-    padding: 0 18px 11px;
+    padding: 0 12px 11px;
     overflow-x: auto;
     overflow-y: hidden;
     border-top: 1px solid var(--line);
@@ -678,7 +678,7 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
     flex: none;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
   }
 
   .month-group > b {
@@ -690,21 +690,30 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
     letter-spacing: 0.1em;
   }
 
+  .month-short {
+    display: none;
+  }
+
   .ticks {
     display: flex;
-    gap: 3px;
+    gap: 2px;
   }
 
   .tick {
     position: relative;
-    width: 30px;
-    padding-top: 12px;
+    flex: none;
+    width: 24px;
+    height: 29px;
+    padding-top: 11px;
     border: 0;
     background: transparent;
     color: var(--dim);
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
+    line-height: 16px;
+    text-align: center;
+    white-space: nowrap;
     cursor: pointer;
   }
 
@@ -753,10 +762,68 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
     content: "";
     position: absolute;
     top: 0;
-    right: -3px;
-    width: 3px;
+    right: -2px;
+    width: 2px;
     height: 4px;
     background: var(--li);
+  }
+
+  #rail[data-density="bars"] {
+    gap: 10px;
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  #rail[data-density="bars"] .month-group {
+    gap: 4px;
+  }
+
+  #rail[data-density="bars"] .month-year,
+  #rail[data-density="bars"] .month-full {
+    display: none;
+  }
+
+  #rail[data-density="bars"] .month-short {
+    display: inline;
+  }
+
+  #rail[data-density="bars"] .ticks {
+    gap: 2px;
+  }
+
+  #rail[data-density="bars"] .tick {
+    width: 16px;
+    height: 22px;
+    padding: 0;
+    font-size: 0;
+  }
+
+  #rail[data-density="bars"] .tick::before {
+    top: 8px;
+    left: 2px;
+    width: 12px;
+    height: 4px;
+  }
+
+  #rail[data-density="bars"] .tick[aria-current="true"] span,
+  #rail[data-density="bars"] .tick[data-today="true"] span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  #rail[data-density="bars"] .tick[data-today="true"]::before {
+    outline: 1px solid #ff3b30;
+    outline-offset: 2px;
+  }
+
+  #rail[data-density="bars"] .tick[data-cross="true"]::after {
+    top: 6px;
+    right: 1px;
   }
 
   /* 전체화면 보기 */
@@ -1482,6 +1549,16 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
     return now >= start && now <= end;
   }
 
+  function fitRailDensity() {
+    const rail = $("rail");
+    if (!rail.children.length) return;
+
+    rail.dataset.density = "labels";
+    if (rail.scrollWidth > rail.clientWidth + 1) {
+      rail.dataset.density = "bars";
+    }
+  }
+
   function buildRail() {
     const rail = $("rail");
     rail.innerHTML = "";
@@ -1499,7 +1576,18 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
         group.className = "month-group";
 
         const title = document.createElement("b");
-        title.textContent = `${week.y} · ${pad(week.m)}월`;
+        const year = document.createElement("span");
+        year.className = "month-year";
+        year.textContent = `${week.y} · `;
+
+        const fullMonth = document.createElement("span");
+        fullMonth.className = "month-full";
+        fullMonth.textContent = `${pad(week.m)}월`;
+
+        const shortMonth = document.createElement("span");
+        shortMonth.className = "month-short";
+        shortMonth.textContent = `${week.m}월`;
+        title.append(year, fullMonth, shortMonth);
 
         ticks = document.createElement("div");
         ticks.className = "ticks";
@@ -1514,7 +1602,8 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
       button.dataset.index = String(itemIndex);
       button.dataset.cross = String(Boolean(week.cross));
       button.title = `${week.y}년 ${pad(week.m)}월 ${week.w}주 · ${week.span}`;
-      button.innerHTML = `<span>${week.w}주</span>`;
+      button.setAttribute("aria-label", button.title);
+      button.innerHTML = `<span class="tick-label">${week.w}주</span>`;
 
       if (weekContainsToday(week)) {
         button.dataset.today = "true";
@@ -1523,6 +1612,8 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
       button.addEventListener("click", () => go(itemIndex));
       ticks.append(button);
     });
+
+    fitRailDensity();
   }
 
   function setSelect(select, values, selectedValue, formatter) {
@@ -1985,6 +2076,8 @@ const MONTHLY_RATIOS = [{"y":2026,"m":1,"closing_week":"2026-01-5","span":"01/26
     monthlyYear = Number($("monthly-year").value);
     renderMonthlyRatios();
   });
+  window.addEventListener("resize", fitRailDensity, { passive: true });
+  document.fonts?.ready.then(fitRailDensity);
   document.addEventListener("pointerdown", (event) => {
     if (
       !$("monthly-panel").hidden &&
